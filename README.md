@@ -68,6 +68,18 @@ flatpak install --user Riff-x86_64.flatpak
 
 See the [Development Guide](doc/Development.md) for full build instructions, project structure, and troubleshooting.
 
+**macOS (native app)**
+
+A native SwiftUI client for macOS 26 on Apple Silicon lives in `macos/` and shares the Rust core with the Linux app. It needs Xcode or the Command Line Tools, Rust and Java.
+
+```sh
+./scripts/build-macos.sh release --dmg   # builds build/macos/Riff.app and a DMG
+open build/macos/Riff.app
+./scripts/test-macos.sh                  # Rust and Swift tests
+```
+
+The app is ad-hoc signed, so the first launch from a downloaded DMG needs right-click, Open. See [the macOS plan](doc/macOS-Plan.md) for how it is put together.
+
 ## Contributing
 
 Contributions are welcome and encouraged! See [Contributing Guide](CONTRIBUTING.md) for PR guidelines and process, and the [Development Guide](doc/Development.md) for build setup, feature flags, and debug tools.

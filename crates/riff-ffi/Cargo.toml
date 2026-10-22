@@ -13,7 +13,9 @@ name = "riff_ffi"
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
-[dependencies]
+# The core only targets macOS. On Linux the crate compiles to nothing, so
+# `cargo check --workspace` there does not pull in rodio or the bindings.
+[target.'cfg(target_os = "macos")'.dependencies]
 riff-api = { path = "../riff-api", default-features = false }
 riff-auth = { path = "../riff-auth", default-features = false }
 riff-config = { path = "../riff-config", default-features = false }
@@ -28,11 +30,11 @@ serde_json = "1.0.96"
 thiserror = "2.0.20"
 url = "2.4.1"
 
-[dependencies.librespot]
+[target.'cfg(target_os = "macos")'.dependencies.librespot]
 version = "0.8.0"
 default-features = false
 features = ["native-tls"]
 
-[dependencies.tokio]
+[target.'cfg(target_os = "macos")'.dependencies.tokio]
 version = "1"
 features = ["rt", "rt-multi-thread", "macros", "sync", "time"]

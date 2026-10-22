@@ -45,6 +45,7 @@ struct DetailHeader<Actions: View>: View {
             Spacer(minLength: 0)
         }
         .padding(24)
+        .background { ArtTintBackground(url: art.medium ?? art.large) }
     }
 
     private func stripTags(_ html: String) -> String {

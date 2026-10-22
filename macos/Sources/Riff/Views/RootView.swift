@@ -18,6 +18,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) { ToastStack() }
+        .overlay(alignment: .top) { ClipboardLinkBanner() }
         .alert("Playback Unavailable", isPresented: $model.showDrmBlocked) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -175,5 +176,47 @@ struct UserMenu: View {
         } label: {
             Label("Account", systemImage: "person.crop.circle")
         }
+    }
+}
+
+/// Offers to open a Spotify link found on the clipboard when Riff becomes
+/// active, like the GTK clipboard import.
+struct ClipboardLinkBanner: View {
+    @Environment(AppModel.self) private var model
+    @State private var link: String?
+    @State private var lastChange = NSPasteboard.general.changeCount
+
+    var body: some View {
+        Group {
+            if let link, case .loggedIn = model.session {
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                    Text("Open the Spotify link from your clipboard?")
+                    Button("Open") {
+                        model.open(link: link)
+                        self.link = nil
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Dismiss") { self.link = nil }
+                }
+                .padding(10)
+                .glassEffect()
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: link)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            check()
+        }
+    }
+
+    private func check() {
+        let pasteboard = NSPasteboard.general
+        guard pasteboard.changeCount != lastChange else { return }
+        lastChange = pasteboard.changeCount
+        guard let text = pasteboard.string(forType: .string),
+              parseSpotifyLink(link: text) != nil else { return }
+        link = text
     }
 }

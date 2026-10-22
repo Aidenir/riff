@@ -25,6 +25,9 @@ struct PlaybackBar: View {
                     }
                     .help("Lyrics")
                 }
+                if model.settings.featureDeviceSelector {
+                    DeviceMenu()
+                }
                 VolumeControl()
             }
             .frame(minWidth: 160, maxWidth: 220, alignment: .trailing)
@@ -188,6 +191,60 @@ struct ArtistLinks: View {
                     if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                 }
             }
+        }
+    }
+}
+
+/// Spotify Connect device picker (feature flag `DeviceSelector`).
+struct DeviceMenu: View {
+    @Environment(AppModel.self) private var model
+    @State private var devices: [DeviceInfo] = []
+    @State private var loading = false
+
+    var body: some View {
+        let active = model.playback.deviceId
+        Menu {
+            Button {
+                model.core.switchDevice(deviceId: nil)
+            } label: {
+                Label("This Mac", systemImage: active == nil ? "checkmark" : "laptopcomputer")
+            }
+            if !devices.isEmpty { Divider() }
+            ForEach(devices, id: \.id) { device in
+                Button {
+                    model.core.switchDevice(deviceId: device.id)
+                } label: {
+                    Label(device.name, systemImage: active == device.id ? "checkmark" : icon(device.kind))
+                }
+            }
+            Divider()
+            Button(loading ? "Looking for Devices…" : "Refresh Devices") { refresh() }
+                .disabled(loading)
+        } label: {
+            Image(systemName: active == nil ? "hifispeaker" : "hifispeaker.fill")
+                .foregroundStyle(active == nil ? Color.primary : Color.accentColor)
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Play on another device")
+        .onAppear { refresh() }
+    }
+
+    private func refresh() {
+        loading = true
+        Task {
+            defer { loading = false }
+            do { devices = try await model.core.devices() } catch { model.report(error) }
+        }
+    }
+
+    private func icon(_ kind: DeviceType) -> String {
+        switch kind {
+        case .phone: "iphone"
+        case .computer: "desktopcomputer"
+        case .speaker: "hifispeaker"
+        case .tv: "tv"
+        case .other: "dot.radiowaves.left.and.right"
         }
     }
 }

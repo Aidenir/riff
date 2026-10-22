@@ -138,6 +138,7 @@ struct NowPlayingView: View {
                 }
                 .padding(32)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { ArtTintBackground(url: track.art.medium) }
                 Divider()
                 QueueList(compact: true)
                     .frame(width: 340)

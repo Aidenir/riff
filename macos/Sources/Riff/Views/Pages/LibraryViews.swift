@@ -143,6 +143,7 @@ private struct LibraryGrid: View {
         .searchable(text: $filter, placement: .toolbar, prompt: "Filter")
         .toolbar {
             ToolbarItem { SortPicker(order: $sort) }
+            ToolbarItem { CardSizePicker() }
         }
     }
 
@@ -343,5 +344,19 @@ struct PlayButtons: View {
             }
         }
         .controlSize(.large)
+    }
+}
+
+struct CardSizePicker: View {
+    @AppStorage(CardSize.key) private var size = CardSize.large
+
+    var body: some View {
+        Picker("Card Size", selection: $size) {
+            Label("Small", systemImage: "square.grid.3x3").tag(CardSize.small)
+            Label("Large", systemImage: "square.grid.2x2").tag(CardSize.large)
+        }
+        .pickerStyle(.segmented)
+        .labelStyle(.iconOnly)
+        .help("Card size")
     }
 }

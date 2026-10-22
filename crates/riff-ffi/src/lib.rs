@@ -5,6 +5,8 @@
 //! Swift talks to it through UniFFI: async methods for data, plain methods
 //! for playback commands, and a [`Listener`] for events coming back.
 
+#![cfg(target_os = "macos")]
+
 #[macro_use]
 extern crate log;
 
@@ -21,6 +23,7 @@ use riff_core::play_queue::{EntryKey, SongsSource};
 use riff_player::{Command, PlayerDelegate, SpotifyError, SpotifyPlayerSettings};
 use url::Url;
 
+mod connect;
 mod models;
 mod playback;
 mod settings;
@@ -392,9 +395,25 @@ impl RiffCore {
         self.settings.get()
     }
 
+    /// Save settings edited in the UI. Values the core keeps up to date
+    /// itself (volume, shuffle, repeat, DRM marker) are kept from the store,
+    /// so a stale copy from Swift cannot roll them back.
     pub fn update_settings(&self, settings: AppSettings) {
+        let current = self.settings.get();
+        let settings = AppSettings {
+            volume: current.volume,
+            shuffle: current.shuffle,
+            repeat: current.repeat,
+            drm_verified_user: current.drm_verified_user,
+            ..settings
+        };
         let old = self.settings.set(settings.clone());
         self.apply_settings(&old, &settings);
+    }
+
+    /// Debug menu: forget that this account played, re-arming DRM detection.
+    pub fn reset_drm_verification(&self) {
+        self.settings.update(|s| s.drm_verified_user.clear());
     }
 
     pub fn feature_flags(&self) -> Vec<FeatureFlagInfo> {
@@ -602,6 +621,25 @@ impl RiffCore {
         if let (Some(key), Some(target)) = (parse_key(&key), parse_key(&target)) {
             self.playback.send(Msg::MoveEntry { key, target, after });
         }
+    }
+
+    // Spotify Connect
+
+    /// Devices on the account that Riff could play on.
+    pub async fn devices(&self) -> Result<Vec<DeviceInfo>, CoreError> {
+        let api = Arc::clone(&self.api);
+        self.spawn(async move {
+            let devices = api
+                .get_devices(Load::new(LoadPriority::Transport, current_epoch()))
+                .await?;
+            Ok(devices.iter().map(DeviceInfo::from).collect())
+        })
+        .await
+    }
+
+    /// Move playback to a Connect device, or back to this Mac with `None`.
+    pub fn switch_device(&self, device_id: Option<String>) {
+        self.playback.send(Msg::SwitchDevice(device_id));
     }
 
     // Library and catalog

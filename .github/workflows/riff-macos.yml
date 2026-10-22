@@ -1,0 +1,59 @@
+name: riff-macos
+
+on:
+  push:
+    branches: [main, development]
+    tags: ['v*']
+  pull_request:
+    branches: [main, development]
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: "macOS app"
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Generate Spotify API crate
+        run: ./scripts/generate-spotify-api.sh
+
+      - name: Build app and DMG
+        run: ./scripts/build-macos.sh release --dmg
+
+      - name: Run tests
+        run: ./scripts/test-macos.sh
+
+      # Ad-hoc signed until a Developer ID is set up; add codesign with that
+      # identity and `xcrun notarytool submit --wait` here then.
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: Riff-macOS
+          path: build/macos/*.dmg
+
+      - name: Attach DMG to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" build/macos/*.dmg --clobber

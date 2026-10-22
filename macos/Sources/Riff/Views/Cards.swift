@@ -151,9 +151,10 @@ struct CardMenu: View {
 struct CardGrid: View {
     let items: [CardItem]
     var onLoadMore: (() -> Void)?
+    @AppStorage(CardSize.key) private var size = CardSize.large
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 20)], spacing: 24) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: size.minimum, maximum: size.maximum), spacing: 20)], spacing: 24) {
             ForEach(items) { item in
                 CardView(item: item)
                     .onAppear {
@@ -205,4 +206,13 @@ struct LoadState: View {
             ProgressView().frame(maxWidth: .infinity, minHeight: 200)
         }
     }
+}
+
+/// Card size on library pages, the GTK "card-size" setting.
+enum CardSize: String, CaseIterable {
+    case small, large
+    static let key = "cardSize"
+
+    var minimum: CGFloat { self == .small ? 110 : 150 }
+    var maximum: CGFloat { self == .small ? 150 : 220 }
 }

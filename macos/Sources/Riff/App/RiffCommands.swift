@@ -144,7 +144,7 @@ struct DebugCommands: Commands {
             Button("Bump Navigation Epoch") { _ = model.core.bumpEpoch() }
             Button("Clear Cache") { Task { await model.core.clearCache() } }
             Button("Show Test Notification") { model.show("Test notification") }
-            Button("Reset DRM Verification") { model.settings.drmVerifiedUser = "" }
+            Button("Reset DRM Verification") { model.core.resetDrmVerification() }
         }
     }
 }

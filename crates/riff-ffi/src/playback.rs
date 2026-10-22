@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use futures::channel::mpsc::UnboundedSender;
 use librespot::core::spotify_id::SpotifyId;
 use librespot::core::SpotifyUri;
-use riff_api::models::{ContentRating, Page, Track};
+use riff_api::models::{ContentRating, Page, PlayerState, Track};
 use riff_api::{ApiService, DomainError, Load, LoadPriority, RepeatMode};
 use riff_core::play_queue::{EntryKey, PageRequest, PlayQueue, SongsSource, CONTEXT_PAGE_SIZE};
 use riff_player::Command;
@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 use crate::models::{
     CoreEvent, PlaySource, PlaybackSnapshot, QueueEntry, QueueSnapshot, TrackInfo,
 };
-use crate::Listener;
+use crate::{connect, Listener};
 
 // An unanswered page request is retried after this.
 const RETRY_AFTER: Duration = Duration::from_secs(10);
@@ -72,6 +72,33 @@ pub enum Msg {
     StopPlayback,
     ExplicitFilterLocked(bool),
     PageLoaded(SongsSource, Page<Track>),
+    // Spotify Connect.
+    /// Play on a Connect device, or locally with `None`.
+    SwitchDevice(Option<String>),
+    /// Ask the active Connect device for its state.
+    PollDevice,
+    RemoteState(PlayerState, Option<Vec<Track>>),
+    DeviceLost,
+}
+
+/// A Web API call controlling a Spotify Connect device.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoteOp {
+    PlayContext { uri: String, offset: usize },
+    PlayUris { uris: Vec<String>, offset: usize },
+    Resume,
+    Pause,
+    Seek(u32),
+    Volume(u8),
+    Shuffle(bool),
+    Repeat(RepeatMode),
+}
+
+/// Where a playback command goes: the local librespot player or a device.
+#[derive(Debug)]
+pub enum Out {
+    Local(Command),
+    Remote(String, RemoteOp),
 }
 
 /// Playback position that keeps counting while playing.
@@ -111,7 +138,10 @@ struct Controller {
     explicit_locked: bool,
     last_page_request: Option<(SongsSource, usize, Instant)>,
     // Effects collected while handling a message.
-    commands: Vec<Command>,
+    commands: Vec<Out>,
+    /// Spotify Connect device being controlled, `None` when playing here.
+    device: Option<String>,
+    last_remote_queue: Option<Vec<String>>,
     queue_changed: bool,
 }
 
@@ -126,6 +156,103 @@ fn track_uri(id: &str) -> Option<SpotifyUri> {
 }
 
 impl Controller {
+    /// Routes a player command to librespot, or translates it into a Web
+    /// API call when a Connect device is active (src/connect on Linux).
+    fn send(&mut self, command: Command) {
+        let Some(device) = self.device.clone() else {
+            self.commands.push(Out::Local(command));
+            return;
+        };
+        let op = match command {
+            Command::PlayerLoad { .. } => Some(self.remote_load()),
+            Command::PlayerResume => Some(RemoteOp::Resume),
+            Command::PlayerPause | Command::PlayerStop => Some(RemoteOp::Pause),
+            Command::PlayerSeek(position) => Some(RemoteOp::Seek(position)),
+            Command::PlayerSetVolume(volume) => Some(RemoteOp::Volume((volume * 100.0) as u8)),
+            _ => None,
+        };
+        if let Some(op) = op {
+            self.commands.push(Out::Remote(device, op));
+        }
+    }
+
+    fn send_remote(&mut self, op: RemoteOp) {
+        if let Some(device) = self.device.clone() {
+            self.commands.push(Out::Remote(device, op));
+        }
+    }
+
+    /// Play the current track on the device, inside its album or playlist
+    /// when it has one so the device can carry on by itself.
+    fn remote_load(&self) -> RemoteOp {
+        let context = self
+            .queue
+            .source()
+            .and_then(|s| s.spotify_uri())
+            .zip(self.queue.current_context_index())
+            .filter(|_| !self.queue.is_shuffled());
+        match context {
+            Some((uri, offset)) => RemoteOp::PlayContext { uri, offset },
+            None => RemoteOp::PlayUris {
+                uris: self
+                    .queue
+                    .upcoming()
+                    .iter()
+                    .map(|t| format!("spotify:track:{}", t.rri.id))
+                    .collect(),
+                offset: 0,
+            },
+        }
+    }
+
+    fn switch_device(&mut self, device: Option<String>) {
+        if device == self.device {
+            return;
+        }
+        let position = self.position.current() as u32;
+        let had_track = self.queue.current().is_some();
+        match self.device.take() {
+            Some(old) => self.commands.push(Out::Remote(old, RemoteOp::Pause)),
+            None => self.commands.push(Out::Local(Command::PlayerStop)),
+        }
+        self.device = device;
+        self.last_remote_queue = None;
+        if had_track {
+            self.load_current(self.playing);
+            if position > 0 {
+                self.send(Command::PlayerSeek(position));
+            }
+            if !self.playing {
+                self.send(Command::PlayerPause);
+            }
+        }
+    }
+
+    /// Mirror what the device is doing, without sending anything back.
+    fn apply_remote(&mut self, state: PlayerState, queue: Option<Vec<Track>>) {
+        if let Some(tracks) = queue {
+            self.last_remote_queue = Some(tracks.iter().map(|t| t.rri.id.clone()).collect());
+            self.queue.set_context(None, tracks);
+            self.queue_changed = true;
+        }
+        if let Some(id) = state.current_track_id.as_ref().map(|r| r.id.clone()) {
+            if self.current_id().as_deref() != Some(id.as_str()) && self.queue.play_id(&id) {
+                self.queue_changed = true;
+            }
+        }
+        self.playing = state.is_playing;
+        self.position
+            .set(state.progress_ms as u64, state.is_playing);
+        if self.repeat != state.repeat {
+            self.repeat = state.repeat;
+            self.queue_changed = true;
+        }
+        if self.queue.is_shuffled() != state.shuffle {
+            self.queue.set_shuffled(state.shuffle);
+            self.queue_changed = true;
+        }
+    }
+
     fn skipper(&self) -> impl Fn(&Track) -> bool {
         let skip_explicit = self.skip_explicit;
         move |track: &Track| !track.playable || (skip_explicit && is_explicit(track))
@@ -137,7 +264,7 @@ impl Controller {
 
     fn load_current(&mut self, resume: bool) {
         if let Some(track) = self.current_id().as_deref().and_then(track_uri) {
-            self.commands.push(Command::PlayerLoad { track, resume });
+            self.send(Command::PlayerLoad { track, resume });
         }
     }
 
@@ -153,7 +280,7 @@ impl Controller {
         self.playing = false;
         self.position.set(0, false);
         self.queue_changed = true;
-        self.commands.push(Command::PlayerStop);
+        self.send(Command::PlayerStop);
     }
 
     fn play_next(&mut self, auto: bool) {
@@ -194,10 +321,10 @@ impl Controller {
         self.playing = !self.playing;
         if self.playing {
             self.position.resume();
-            self.commands.push(Command::PlayerResume);
+            self.send(Command::PlayerResume);
         } else {
             self.position.pause();
-            self.commands.push(Command::PlayerPause);
+            self.send(Command::PlayerPause);
         }
         Some(self.playing)
     }
@@ -206,13 +333,13 @@ impl Controller {
         let volume = volume.clamp(0.0, 1.0);
         if self.volume != volume {
             self.volume = volume;
-            self.commands.push(Command::PlayerSetVolume(volume));
+            self.send(Command::PlayerSetVolume(volume));
         }
     }
 
     fn seek_to(&mut self, position: u32) {
         self.position.set(position as u64, self.playing);
-        self.commands.push(Command::PlayerSeek(position));
+        self.send(Command::PlayerSeek(position));
     }
 
     fn previous(&mut self) {
@@ -312,10 +439,12 @@ impl Controller {
             Msg::SetShuffle(shuffle) => {
                 self.queue.set_shuffled(shuffle);
                 self.queue_changed = true;
+                self.send_remote(RemoteOp::Shuffle(shuffle));
             }
             Msg::SetRepeat(mode) => {
                 self.repeat = mode;
                 self.queue_changed = true;
+                self.send_remote(RemoteOp::Repeat(mode));
             }
             Msg::Enqueue(tracks) => {
                 self.queue.enqueue(tracks);
@@ -350,9 +479,17 @@ impl Controller {
                 let skip = self.skipper();
                 if let Some(track) = self.queue.peek_next(true, self.repeat, skip) {
                     if let Some(uri) = track_uri(&track.rri.id) {
-                        self.commands.push(Command::PlayerPreload(uri));
+                        self.send(Command::PlayerPreload(uri));
                     }
                 }
+            }
+            Msg::SwitchDevice(device) => self.switch_device(device),
+            Msg::PollDevice => {}
+            Msg::RemoteState(state, queue) => self.apply_remote(state, queue),
+            Msg::DeviceLost => {
+                self.device = None;
+                self.playing = false;
+                self.position.pause();
             }
             Msg::PageLoaded(source, page) => {
                 let new_source = self.queue.add_page(source, page);
@@ -391,6 +528,7 @@ impl Controller {
             volume: self.volume,
             source: self.queue.source().map(PlaySource::from),
             has_next: self.queue.has_next(self.repeat),
+            device_id: self.device.clone(),
             skip_explicit: self.skip_explicit,
             explicit_filter_locked: self.explicit_locked,
         }
@@ -482,6 +620,8 @@ pub fn start(
         explicit_locked: false,
         last_page_request: None,
         commands: vec![],
+        device: None,
+        last_remote_queue: None,
         queue_changed: false,
     };
     controller.queue.set_shuffled(init.shuffle);
@@ -494,12 +634,45 @@ pub fn start(
         queue: Arc::clone(&queue),
     };
 
+    // Connect devices are polled, as on Linux.
+    let poller = sender.clone();
+    runtime.spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            if poller.send(Msg::PollDevice).is_err() {
+                break;
+            }
+        }
+    });
+
     runtime.spawn(async move {
         while let Some(msg) = receiver.recv().await {
-            let syncs_only = matches!(msg, Msg::SyncPosition(_));
+            let syncs_only = matches!(msg, Msg::SyncPosition(_) | Msg::PollDevice);
+            let polling = matches!(msg, Msg::PollDevice);
             controller.handle(msg);
-            for command in controller.commands.drain(..) {
-                let _ = player.unbounded_send(command);
+            let mut remote = vec![];
+            for out in controller.commands.drain(..) {
+                match out {
+                    Out::Local(command) => {
+                        let _ = player.unbounded_send(command);
+                    }
+                    Out::Remote(device, op) => remote.push((device, op)),
+                }
+            }
+            if !remote.is_empty() {
+                tokio::spawn(connect::run(
+                    Arc::clone(&api),
+                    remote,
+                    sender.clone(),
+                    Arc::clone(&listener),
+                ));
+            }
+            if polling && controller.device.is_some() {
+                let last = controller.last_remote_queue.clone();
+                let api = Arc::clone(&api);
+                let sender = sender.clone();
+                tokio::spawn(async move { connect::poll(api, last, sender).await });
             }
             if let Some((source, request)) = controller.next_page() {
                 let api = Arc::clone(&api);
@@ -580,6 +753,8 @@ mod tests {
             explicit_locked: false,
             last_page_request: None,
             commands: vec![],
+            device: None,
+            last_remote_queue: None,
             queue_changed: false,
         }
     }
@@ -604,7 +779,7 @@ mod tests {
         assert!(c.playing);
         assert!(matches!(
             c.commands.last(),
-            Some(Command::PlayerLoad { resume: true, .. })
+            Some(Out::Local(Command::PlayerLoad { resume: true, .. }))
         ));
     }
 
@@ -643,6 +818,30 @@ mod tests {
             shuffle: Some(false),
         });
         assert_eq!(c.current_id().as_deref(), Some("y"));
+    }
+
+    #[test]
+    fn connect_commands_go_to_the_device() {
+        const A: &str = "7GhIk7Il098yCjg4BQjzvb";
+        let mut c = controller();
+        play(&mut c, &[A], Some(A));
+        c.commands.clear();
+        c.handle(Msg::SwitchDevice(Some("dev".into())));
+        assert!(matches!(c.commands[0], Out::Local(Command::PlayerStop)));
+        assert!(c.commands.iter().any(|o| matches!(
+            o,
+            Out::Remote(d, RemoteOp::PlayUris { .. }) if d == "dev"
+        )));
+        c.commands.clear();
+        c.handle(Msg::Pause);
+        assert!(matches!(&c.commands[..], [Out::Remote(_, RemoteOp::Pause)]));
+        c.commands.clear();
+        c.handle(Msg::SwitchDevice(None));
+        assert!(matches!(c.commands[0], Out::Remote(_, RemoteOp::Pause)));
+        assert!(c
+            .commands
+            .iter()
+            .any(|o| matches!(o, Out::Local(Command::PlayerLoad { resume: false, .. }))));
     }
 
     #[test]

@@ -426,6 +426,8 @@ pub struct PlaybackSnapshot {
     pub volume: f64,
     pub source: Option<PlaySource>,
     pub has_next: bool,
+    /// Spotify Connect device playing, `None` when playing on this Mac.
+    pub device_id: Option<String>,
     pub skip_explicit: bool,
     pub explicit_filter_locked: bool,
 }
@@ -496,4 +498,41 @@ pub enum RecentItem {
     Album { album: AlbumInfo },
     Playlist { playlist: PlaylistInfo },
     Artist { artist: ArtistInfo },
+}
+
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceType {
+    Phone,
+    Computer,
+    Speaker,
+    Tv,
+    Other,
+}
+
+/// A Spotify Connect device the user can play on.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct DeviceInfo {
+    pub id: String,
+    pub name: String,
+    pub kind: DeviceType,
+    pub is_active: bool,
+    pub volume_percent: Option<u8>,
+}
+
+impl From<&riff_api::Device> for DeviceInfo {
+    fn from(d: &riff_api::Device) -> Self {
+        Self {
+            id: d.id.clone(),
+            name: d.label.clone(),
+            kind: match d.kind {
+                riff_api::DeviceKind::Phone => DeviceType::Phone,
+                riff_api::DeviceKind::Computer => DeviceType::Computer,
+                riff_api::DeviceKind::Speaker => DeviceType::Speaker,
+                riff_api::DeviceKind::Tv => DeviceType::Tv,
+                riff_api::DeviceKind::Other => DeviceType::Other,
+            },
+            is_active: d.is_active,
+            volume_percent: d.volume_percent,
+        }
+    }
 }
