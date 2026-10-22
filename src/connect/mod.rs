@@ -11,7 +11,8 @@ use riff_api::ApiService;
 mod player;
 pub use player::ConnectCommand;
 
-#[tokio::main]
+// Polls and a few requests: one thread is enough
+#[tokio::main(flavor = "current_thread")]
 async fn connect_server(
     api: Arc<ApiService>,
     action_sender: UnboundedSender<AppAction>,
