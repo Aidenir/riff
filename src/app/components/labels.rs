@@ -207,6 +207,8 @@ pub fn route_label(route: &Route) -> String {
         Route::User(_) => gettext("User"),
         // translators: The search page in the back/forward history menu.
         Route::Search => gettext("Search"),
+        // translators: The lyrics page in the back/forward history menu.
+        Route::Lyrics => gettext("Lyrics"),
     }
 }
 

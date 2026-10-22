@@ -119,6 +119,7 @@ fn route_icon(route: &Route) -> &'static str {
         Route::Artist(_) | Route::User(_) => "avatar-default-symbolic",
         Route::Playlist(_) => "playlist2-symbolic",
         Route::Search => "system-search-symbolic",
+        Route::Lyrics => "lyrics-symbolic",
     }
 }
 
@@ -166,6 +167,11 @@ impl AppHeaderBarComponent {
                 drop(state);
                 widget.show_history_menu(side, items);
             }
+        ));
+        widget.connect_global_search(clone!(
+            #[strong]
+            dispatcher,
+            move |query| dispatcher.dispatch(BrowserAction::Search(query).into())
         ));
         widget.connect_history_pick(clone!(
             #[strong]

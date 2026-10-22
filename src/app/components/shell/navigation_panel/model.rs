@@ -1,5 +1,7 @@
 use gettextrs::gettext;
 use gtk::prelude::*;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use tokio::sync::oneshot;
 
@@ -10,11 +12,12 @@ use crate::app::components::{
     dispatch_api_call, dispatch_api_call_many, dispatch_api_read, dispatch_api_read_many,
     queue_source_tracks, upload_playlist_cover, PlaylistForm, Saved,
 };
-use crate::app::models::{CardModel, PlaylistSummary};
+use crate::app::models::{CardModel, LibraryNode, PlaylistSummary};
 use crate::app::playlist_actions::unfollow_and_unpin_playlist;
 use crate::app::state::{load_context, start_actions, PlaybackAction, Route};
 use crate::app::{AppAction, AppModel, BrowserAction, Dispatcher, PaginationTarget, SongsSource};
 use crate::settings;
+use riff_api::Load;
 use riff_config::feature_flags::{is_enabled, FeatureFlag};
 use riff_core::play_queue::CONTEXT_PAGE_SIZE;
 
@@ -35,6 +38,8 @@ fn start_context(
 pub struct NavigationPanelModel {
     app_model: Rc<AppModel>,
     dispatcher: Dispatcher,
+    // The ids of the playlist folders the user opened
+    expanded_folders: RefCell<HashSet<String>>,
 }
 
 impl NavigationPanelModel {
@@ -42,6 +47,31 @@ impl NavigationPanelModel {
         Self {
             app_model,
             dispatcher,
+            expanded_folders: Default::default(),
+        }
+    }
+
+    /// Fetch how the user sorted their playlists into folders. Without it,
+    /// the playlists are listed flat.
+    pub fn load_folders(&self) {
+        let Some(user_id) = self.logged_user_id() else {
+            return;
+        };
+        let api = self.app_model.api();
+        let dispatcher = self.dispatcher.clone();
+        tokio::spawn(async move {
+            match api.get_library_tree(&user_id, Load::background()).await {
+                Ok(tree) => dispatcher.dispatch(BrowserAction::SetPlaylistFolders(tree).into()),
+                // The flat list of playlists stays
+                Err(e) => warn!("Playlist folders are unavailable: {e}"),
+            }
+        });
+    }
+
+    pub fn toggle_folder(&self, id: &str) {
+        let mut expanded = self.expanded_folders.borrow_mut();
+        if !expanded.remove(id) {
+            expanded.insert(id.to_string());
         }
     }
 
@@ -251,7 +281,8 @@ impl NavigationPanelModel {
 
     pub(super) fn navigate(&self, dest: NavigationPanelDestination) {
         let actions = match dest {
-            NavigationPanelDestination::Library
+            NavigationPanelDestination::Home
+            | NavigationPanelDestination::Library
             | NavigationPanelDestination::SavedTracks
             | NavigationPanelDestination::NowPlaying
             | NavigationPanelDestination::SavedPlaylists
@@ -424,14 +455,11 @@ impl NavigationPanelModel {
         };
         let pinned_start = position(PINNED_SECTION).unwrap_or(header);
         let num_header_entries = num_fixed_entries.saturating_sub(pinned_start);
-        list_store.splice(pinned_start, header - pinned_start, pinned.as_slice());
+        splice_changed(list_store, pinned_start, header - pinned_start, &pinned);
 
         let playlists_start = pinned_start + pinned.len() as u32 + num_header_entries;
-        list_store.splice(
-            playlists_start,
-            list_store.n_items().saturating_sub(playlists_start),
-            playlists.as_slice(),
-        );
+        let count = list_store.n_items().saturating_sub(playlists_start);
+        splice_changed(list_store, playlists_start, count, &playlists);
     }
 
     fn pinned_title_for(&self, object: &settings::PinnedObject) -> String {
@@ -497,53 +525,171 @@ impl NavigationPanelModel {
         })
     }
 
+    /// The playlist rows sorted into the user's folders. Saved playlists the
+    /// folders don't list yet, like new ones, come first.
+    fn folder_items(
+        &self,
+        folders: &[LibraryNode],
+        playlists: Vec<NavigationPanelDestination>,
+        pinned_ids: &[String],
+    ) -> Vec<NavigationPanelItem> {
+        let listed: HashSet<&str> = folders.iter().flat_map(|f| f.playlist_ids()).collect();
+        let mut titles = HashMap::new();
+        let mut items = Vec::new();
+        for destination in playlists {
+            let NavigationPanelDestination::Playlist(summary) = destination else {
+                continue;
+            };
+            if pinned_ids.contains(&summary.id) {
+                continue;
+            }
+            if listed.contains(summary.id.as_str()) {
+                titles.insert(summary.id, summary.title);
+            } else {
+                items.push(NavigationPanelItem::from_destination(
+                    NavigationPanelDestination::Playlist(summary),
+                ));
+            }
+        }
+        let expanded = self.expanded_folders.borrow();
+        self.push_folder_items(folders, 0, &titles, pinned_ids, &expanded, &mut items);
+        items
+    }
+
+    fn push_folder_items(
+        &self,
+        nodes: &[LibraryNode],
+        depth: u32,
+        titles: &HashMap<String, String>,
+        pinned_ids: &[String],
+        expanded: &HashSet<String>,
+        items: &mut Vec<NavigationPanelItem>,
+    ) {
+        for node in nodes {
+            match node {
+                LibraryNode::Folder { id, name, children } => {
+                    let open = expanded.contains(id);
+                    let name = Some(name.clone())
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or_else(|| gettext("Unnamed Folder"));
+                    items.push(NavigationPanelItem::folder(id, &name, depth, open));
+                    if open {
+                        self.push_folder_items(
+                            children,
+                            depth + 1,
+                            titles,
+                            pinned_ids,
+                            expanded,
+                            items,
+                        );
+                    }
+                }
+                LibraryNode::Playlist { id, name } => {
+                    if pinned_ids.contains(id) {
+                        continue;
+                    }
+                    let title = titles
+                        .get(id)
+                        .cloned()
+                        .or_else(|| name.clone())
+                        .unwrap_or_else(|| gettext("Unnamed Playlist"));
+                    let item = NavigationPanelItem::from_destination(
+                        NavigationPanelDestination::Playlist(PlaylistSummary {
+                            id: id.clone(),
+                            title,
+                        }),
+                    );
+                    item.set_depth(depth);
+                    items.push(item);
+                }
+            }
+        }
+    }
+
     /// Build the pinned rows (with their section header) and the playlist rows.
     fn build_navigation_panel_items(&self) -> (Vec<NavigationPanelItem>, Vec<NavigationPanelItem>) {
         let mut pinned_items = Vec::new();
-        let mut items = Vec::new();
         let pinned_enabled = is_enabled(FeatureFlag::PinnedObjects);
         let playlists = self.get_playlists();
         let pinned: Vec<settings::PinnedObject> = self
             .logged_user_id()
             .map(|user_id| settings::get_pinned_objects(&user_id))
             .unwrap_or_default();
+        // Pinned playlists are listed with the pins instead, with the feature on
         let pinned_playlist_ids: Vec<String> = pinned
             .iter()
-            .filter(|o| o.kind == settings::PinnedKind::Playlist)
+            .filter(|o| pinned_enabled && o.kind == settings::PinnedKind::Playlist)
             .map(|o| o.id.clone())
             .collect();
 
-        if pinned_enabled {
-            if !pinned.is_empty() {
-                pinned_items.push(NavigationPanelItem::pinned_section());
-                for object in pinned {
-                    pinned_items.push(self.to_pinned_item(object));
-                }
+        if pinned_enabled && !pinned.is_empty() {
+            pinned_items.push(NavigationPanelItem::pinned_section());
+            for object in pinned {
+                pinned_items.push(self.to_pinned_item(object));
             }
-
-            let mut unpinned = Vec::new();
-            for p in playlists {
-                if let NavigationPanelDestination::Playlist(ref summary) = p {
-                    if pinned_playlist_ids.contains(&summary.id) {
-                        continue;
-                    }
-                }
-                unpinned.push(p);
-            }
-
-            items.extend(
-                unpinned
-                    .into_iter()
-                    .map(NavigationPanelItem::from_destination),
-            );
-        } else {
-            items.extend(
-                playlists
-                    .into_iter()
-                    .map(NavigationPanelItem::from_destination),
-            );
         }
 
+        let folders = self
+            .app_model
+            .get_state()
+            .browser
+            .home_state()
+            .and_then(|home| home.playlist_folders.clone());
+        if let Some(folders) = folders {
+            let items = self.folder_items(&folders, playlists, &pinned_playlist_ids);
+            return (pinned_items, items);
+        }
+
+        let items = playlists
+            .into_iter()
+            .filter(|p| {
+                !matches!(p, NavigationPanelDestination::Playlist(summary)
+                    if pinned_playlist_ids.contains(&summary.id))
+            })
+            .map(NavigationPanelItem::from_destination)
+            .collect();
         (pinned_items, items)
+    }
+}
+
+fn same_row(a: &NavigationPanelItem, b: &NavigationPanelItem) -> bool {
+    a.id() == b.id()
+        && a.data() == b.data()
+        && a.title() == b.title()
+        && a.depth() == b.depth()
+        && a.expanded() == b.expanded()
+}
+
+/// Replace the `count` items at `start` with `items`, keeping the rows that
+/// did not change, so the list neither rebuilds nor jumps.
+fn splice_changed(
+    list_store: &gio::ListStore,
+    start: u32,
+    count: u32,
+    items: &[NavigationPanelItem],
+) {
+    let old = |i: u32| {
+        list_store
+            .item(start + i)
+            .and_downcast::<NavigationPanelItem>()
+    };
+    let new_len = items.len() as u32;
+    let mut prefix = 0;
+    while prefix < count.min(new_len)
+        && old(prefix).is_some_and(|o| same_row(&o, &items[prefix as usize]))
+    {
+        prefix += 1;
+    }
+    let mut suffix = 0;
+    while suffix < (count - prefix).min(new_len - prefix)
+        && old(count - 1 - suffix)
+            .is_some_and(|o| same_row(&o, &items[(new_len - 1 - suffix) as usize]))
+    {
+        suffix += 1;
+    }
+    let changed = &items[prefix as usize..(new_len - suffix) as usize];
+    let removed = count - prefix - suffix;
+    if removed > 0 || !changed.is_empty() {
+        list_store.splice(start + prefix, removed, changed);
     }
 }

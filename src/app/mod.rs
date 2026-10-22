@@ -193,7 +193,6 @@ impl App {
                 dispatcher.clone(),
                 header_models,
             ),
-            App::make_search_button(builder, dispatcher.clone()),
             App::make_clipboard_import(builder, Rc::clone(model), dispatcher.clone()),
             App::make_user_menu(builder, Rc::clone(model), dispatcher),
             App::make_notification(builder),
@@ -317,12 +316,6 @@ impl App {
         Box::new(PanelManager::new(
             &window, panel, sheet, app_header, app_model, dispatcher,
         ))
-    }
-
-    fn make_search_button(builder: &gtk::Builder, dispatcher: Dispatcher) -> Box<SearchButton> {
-        let search_button: gtk::Button = builder.object("search_button").unwrap();
-        let model = SearchBarModel(dispatcher);
-        Box::new(SearchButton::new(model, search_button))
     }
 
     fn make_user_menu(

@@ -76,6 +76,9 @@
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
     <file compressed="true" preprocess="xml-stripblanks" alias="now-playing-symbolic.svg">../data/hicolor/symbolic/actions/now-playing-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="queue-symbolic.svg">../data/hicolor/symbolic/actions/queue-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="lyrics-symbolic.svg">../data/hicolor/symbolic/actions/lyrics-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="go-home-symbolic.svg">../data/hicolor/symbolic/actions/go-home-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="folder-open-symbolic.svg">../data/hicolor/symbolic/actions/folder-open-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="drawer-handle-symbolic.svg">../data/hicolor/symbolic/actions/drawer-handle-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">../data/hicolor/symbolic/actions/playlist2-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">../data/hicolor/symbolic/actions/library-music-symbolic.svg</file>

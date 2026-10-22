@@ -6,6 +6,7 @@ use gtk::subclass::prelude::*;
 use crate::app::models::PlaylistSummary;
 use crate::app::state::HomePage;
 
+const HOME: &str = "home";
 const LIBRARY: &str = "library";
 const SAVED_TRACKS: &str = "saved_tracks";
 const NOW_PLAYING: &str = "now_playing";
@@ -18,9 +19,12 @@ const TRACK: &str = "track";
 pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
 pub const PINNED_SECTION: &str = "pinned_section";
 pub const LIBRARY_SECTION: &str = "library_section";
+/// A folder of playlists, which expands rather than navigates
+pub const FOLDER: &str = "folder";
 
 #[derive(Debug)]
 pub enum NavigationPanelDestination {
+    Home,
     Library,
     SavedTracks,
     NowPlaying,
@@ -35,6 +39,7 @@ pub enum NavigationPanelDestination {
 impl NavigationPanelDestination {
     pub fn home_page(&self) -> Option<HomePage> {
         match self {
+            Self::Home => Some(HomePage::Home),
             Self::Library => Some(HomePage::Library),
             Self::SavedTracks => Some(HomePage::SavedTracks),
             Self::NowPlaying => Some(HomePage::NowPlaying),
@@ -48,6 +53,7 @@ impl NavigationPanelDestination {
 
     pub fn from_home_page(page: HomePage) -> Self {
         match page {
+            HomePage::Home => Self::Home,
             HomePage::Library => Self::Library,
             HomePage::SavedTracks => Self::SavedTracks,
             HomePage::NowPlaying => Self::NowPlaying,
@@ -58,6 +64,7 @@ impl NavigationPanelDestination {
 
     pub fn id(&self) -> &'static str {
         match self {
+            Self::Home => HOME,
             Self::Library => LIBRARY,
             Self::SavedTracks => SAVED_TRACKS,
             Self::NowPlaying => NOW_PLAYING,
@@ -72,6 +79,8 @@ impl NavigationPanelDestination {
 
     pub fn title(&self) -> String {
         match self {
+            // translators: This is a navigation panel entry to the page suggesting music.
+            Self::Home => gettext("Home"),
             // translators: This is a navigation panel entry to browse to saved albums.
             Self::Library => gettext("Library"),
             // translators: This is a navigation panel entry to browse to saved tracks.
@@ -91,6 +100,7 @@ impl NavigationPanelDestination {
 
     pub fn icon(&self) -> &'static str {
         match self {
+            Self::Home => "go-home-symbolic",
             Self::Library => "library-music-symbolic",
             Self::SavedTracks => "audio-x-generic-symbolic",
             Self::NowPlaying => "now-playing-symbolic",
@@ -141,6 +151,17 @@ impl NavigationPanelItem {
             .build()
     }
 
+    pub fn folder(id: &str, name: &str, depth: u32, expanded: bool) -> Self {
+        glib::Object::builder()
+            .property("id", FOLDER)
+            .property("data", id)
+            .property("title", name)
+            .property("navigatable", false)
+            .property("depth", depth)
+            .property("expanded", expanded)
+            .build()
+    }
+
     pub fn library_section() -> Self {
         glib::Object::builder()
             .property("id", LIBRARY_SECTION)
@@ -157,6 +178,7 @@ impl NavigationPanelItem {
             let data = self.property::<String>("data");
             let title = self.title();
             match id.as_str() {
+                HOME => Some(NavigationPanelDestination::Home),
                 LIBRARY => Some(NavigationPanelDestination::Library),
                 SAVED_TRACKS => Some(NavigationPanelDestination::SavedTracks),
                 NOW_PLAYING => Some(NavigationPanelDestination::NowPlaying),
@@ -196,6 +218,12 @@ mod imp {
         pub title: RefCell<String>,
         #[property(get, set)]
         pub navigatable: Cell<bool>,
+        /// How many folders deep the row is
+        #[property(get, set)]
+        pub depth: Cell<u32>,
+        /// For folders: whether their content is listed
+        #[property(get, set)]
+        pub expanded: Cell<bool>,
     }
 
     #[glib::object_subclass]

@@ -53,6 +53,10 @@ impl SearchResultsModel {
             .map_state_opt(|s| Some(&s.browser.search_state()?.query).filter(|s| !s.is_empty()))
     }
 
+    pub fn query(&self) -> String {
+        self.get_query().map(|q| q.to_string()).unwrap_or_default()
+    }
+
     pub fn has_query(&self) -> bool {
         self.get_query().is_some()
     }

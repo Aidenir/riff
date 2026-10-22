@@ -7,7 +7,7 @@ use libadwaita::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use super::PlaylistDetailsModel;
+use super::{PlaylistDetailsModel, PlaylistRecommendations};
 
 use crate::app::components::utils::{confirm_delete_playlist, decode_px};
 use crate::app::components::{
@@ -35,6 +35,10 @@ impl PlaylistDetails {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_track_list(None);
+
+        let recommendations = PlaylistRecommendations::new(model.clone());
+        component.append_content(recommendations.widget());
+        component.add_child(Box::new(recommendations));
 
         Self {
             model,

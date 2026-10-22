@@ -37,6 +37,8 @@ pub use constants::*;
 
 pub mod utils;
 
+pub mod art_tint;
+
 pub mod labels;
 
 pub mod clipboard_link;

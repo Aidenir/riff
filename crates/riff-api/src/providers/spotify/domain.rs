@@ -712,6 +712,103 @@ impl MusicProvider for SpotifyDomain {
         Ok(search_results_from_response(&resp))
     }
 
+    async fn get_library_tree(&self, user_id: &str) -> Result<Vec<LibraryNode>, DomainError> {
+        self.internal_api.get_library_tree(user_id).await
+    }
+
+    async fn get_lyrics(&self, track_id: &str) -> Result<Lyrics, DomainError> {
+        self.internal_api.get_lyrics(track_id).await
+    }
+
+    async fn get_playlist_suggestions(
+        &self,
+        id: &str,
+        skip: &[String],
+        count: usize,
+    ) -> Result<Vec<String>, DomainError> {
+        self.internal_api
+            .get_playlist_extension(id, skip, count)
+            .await
+    }
+
+    async fn get_track_radio(&self, track_id: &str) -> Result<Vec<String>, DomainError> {
+        self.internal_api.get_track_radio(track_id).await
+    }
+
+    async fn get_tracks(&self, ids: &[String]) -> Result<Vec<Track>, DomainError> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let config = self.config_or_err()?;
+        match apis::tracks_api::get_several_tracks(&config, &ids.join(","), Some(USER_MARKET)).await
+        {
+            Ok(resp) => Ok(resp.tracks.iter().filter_map(track_from_object).collect()),
+            // Not every app may still list several tracks at once
+            Err(e) => {
+                debug!("spotify: several tracks refused ({e:?}), fetching one by one");
+                let tracks = futures::future::join_all(ids.iter().map(|id| self.get_track(id)));
+                Ok(tracks.await.into_iter().filter_map(Result::ok).collect())
+            }
+        }
+    }
+
+    async fn get_recently_played(&self, limit: usize) -> Result<Vec<PlayHistoryItem>, DomainError> {
+        let config = self.config_or_err()?;
+        let resp =
+            apis::player_api::get_recently_played(&config, Some(limit as i32), None, None).await?;
+        Ok(resp
+            .items
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|item| {
+                Some(PlayHistoryItem {
+                    track: track_from_object(item.track.as_ref()?)?,
+                    context_uri: item.context.as_ref().and_then(|c| c.uri.clone()),
+                })
+            })
+            .collect())
+    }
+
+    async fn get_top_artists(&self, limit: usize) -> Result<Vec<Artist>, DomainError> {
+        use sp::GetUsersTopArtistsAndTracks200ResponseAllOfItemsInner as Item;
+        let config = self.config_or_err()?;
+        let resp = apis::users_api::get_users_top_artists_and_tracks(
+            &config,
+            "artists",
+            Some("short_term"),
+            Some(limit as i32),
+            None,
+        )
+        .await?;
+        Ok(resp
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Artist(artist) => Some(artist_from_object(artist)),
+                Item::Track(_) => None,
+            })
+            .collect())
+    }
+
+    async fn get_category_playlists(
+        &self,
+        category: &str,
+        limit: usize,
+    ) -> Result<Vec<Playlist>, DomainError> {
+        let config = self.config_or_err()?;
+        let resp = apis::categories_api::get_a_categories_playlists(
+            &config,
+            category,
+            Some(limit as i32),
+            None,
+        )
+        .await?;
+        Ok(resp
+            .playlists
+            .map(|page| page.items.iter().map(playlist_from_simplified).collect())
+            .unwrap_or_default())
+    }
+
     async fn get_devices(&self) -> Result<Vec<Device>, DomainError> {
         let config = self.config_or_err()?;
         let resp = apis::player_api::get_a_users_available_devices(&config).await?;

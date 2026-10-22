@@ -145,6 +145,22 @@ impl ScreenFactory {
         PlaylistDetails::new(model, self.registrar.page(&name))
     }
 
+    pub fn make_home_feed(&self) -> impl ListenerComponent {
+        HomeFeed::new(
+            Rc::clone(&self.app_model),
+            self.dispatcher.clone(),
+            self.registrar.page("home"),
+        )
+    }
+
+    pub fn make_lyrics(&self) -> impl ListenerComponent {
+        LyricsPage::new(
+            Rc::clone(&self.app_model),
+            self.dispatcher.clone(),
+            self.registrar.page("lyrics"),
+        )
+    }
+
     pub fn make_user_details(&self, id: String) -> impl ListenerComponent {
         let name = format!("user_{id}");
         let model = UserDetailsModel::new(id, Rc::clone(&self.app_model), self.dispatcher.clone());

@@ -19,6 +19,12 @@ pub use now_playing::*;
 mod queue;
 pub use queue::*;
 
+mod lyrics;
+pub use lyrics::*;
+
+mod home;
+pub use home::*;
+
 mod login;
 pub use login::*;
 

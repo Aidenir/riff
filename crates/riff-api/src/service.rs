@@ -662,6 +662,110 @@ impl ApiService {
         .await
     }
 
+    pub async fn get_library_tree(
+        &self,
+        user_id: &str,
+        load: Load,
+    ) -> Result<Vec<LibraryNode>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_library_tree(user_id).await
+    }
+
+    /// The provider's lyrics for `track`, else LRCLIB's.
+    pub async fn get_lyrics(&self, track: &Track, load: Load) -> Result<Lyrics, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let track = track.clone();
+        self.cached_or_fetch(CacheKey::Lyrics(track.rri.id.clone()), load, async move {
+            match d.get_lyrics(&track.rri.id).await {
+                Ok(lyrics) if !lyrics.lines.is_empty() => Ok(lyrics),
+                result => {
+                    if let Err(e) = result {
+                        info!("api: no provider lyrics ({e}), asking LRCLIB");
+                    }
+                    crate::lrclib::get_lyrics(&track).await
+                }
+            }
+        })
+        .await
+    }
+
+    /// Tracks suggested to extend playlist `id`, leaving out `skip`.
+    pub async fn get_playlist_suggestions(
+        &self,
+        id: &str,
+        skip: Vec<String>,
+        count: usize,
+        load: Load,
+    ) -> Result<Vec<Track>, DomainError> {
+        let ids = {
+            let _slot = self.admit_read(load).await?;
+            self.provider
+                .get_playlist_suggestions(id, &skip, count)
+                .await?
+        };
+        let mut tracks = self.get_tracks(ids, load).await?;
+        tracks.retain(|t| !skip.contains(&t.rri.id));
+        Ok(tracks)
+    }
+
+    /// A radio started from track `track_id`, the track first.
+    pub async fn get_track_radio(
+        &self,
+        track_id: &str,
+        load: Load,
+    ) -> Result<Vec<Track>, DomainError> {
+        let mut ids = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_track_radio(track_id).await?
+        };
+        ids.retain(|id| id != track_id);
+        ids.insert(0, track_id.to_string());
+        // Spotify lists at most 50 tracks at once
+        ids.truncate(50);
+        self.get_tracks(ids, load).await
+    }
+
+    pub async fn get_tracks(
+        &self,
+        ids: Vec<String>,
+        load: Load,
+    ) -> Result<Vec<Track>, DomainError> {
+        let mut tracks = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_tracks(&ids).await?
+        };
+        self.annotate_saved(tracks.iter_mut().collect(), load).await;
+        Ok(tracks)
+    }
+
+    pub async fn get_recently_played(
+        &self,
+        limit: usize,
+        load: Load,
+    ) -> Result<Vec<PlayHistoryItem>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_recently_played(limit).await
+    }
+
+    pub async fn get_top_artists(
+        &self,
+        limit: usize,
+        load: Load,
+    ) -> Result<Vec<Artist>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_top_artists(limit).await
+    }
+
+    pub async fn get_category_playlists(
+        &self,
+        category: &str,
+        limit: usize,
+        load: Load,
+    ) -> Result<Vec<Playlist>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_category_playlists(category, limit).await
+    }
+
     async fn invalidate_albums(&self, ids: &str) {
         for id in ids.split(',').filter(|s| !s.is_empty()) {
             self.json_cache.remove(&CacheKey::Album(id.to_string()));

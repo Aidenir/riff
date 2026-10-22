@@ -172,13 +172,6 @@ Adw.ApplicationWindow window {
                     "flat",
                   ]
 
-                  Button search_button {
-                    icon-name: "system-search-symbolic";
-                    tooltip-text: _("Search");
-                    focus-on-click: false;
-                    can-focus: false;
-                  }
-
                   [title]
                   Adw.WindowTitle {
                     title: "Riff";
@@ -259,7 +252,7 @@ Adw.ApplicationWindow window {
 }
 
 Adw.AboutDialog about {
-  application-name: "Riff";
+  application-name: "Spotify";
   application-icon: "dev.diegovsky.Riff";
   developer-name: "The Riff Team";
   website: "https://github.com/Diegovsky/riff";
@@ -286,7 +279,7 @@ menu main_menu {
     }
 
     item {
-      label: _("About Riff");
+      label: _("About Spotify");
       action: "menu.about";
     }
   }

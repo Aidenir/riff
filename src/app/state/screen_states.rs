@@ -332,6 +332,21 @@ pub struct HomeState {
     pub liked_status: HashMap<String, bool>,
     pub artists: ListStore<CardModel>,
     pub artists_cursor: Option<String>,
+    /// The saved playlists arranged in the user's folders, once known.
+    pub playlist_folders: Option<Vec<LibraryNode>>,
+}
+
+/// Drop playlist `id` from the folder tree.
+fn remove_from_folders(nodes: &mut Vec<LibraryNode>, id: &str) -> bool {
+    let before = nodes.len();
+    nodes.retain(|node| !matches!(node, LibraryNode::Playlist { id: p, .. } if p == id));
+    let mut removed = nodes.len() != before;
+    for node in nodes.iter_mut() {
+        if let LibraryNode::Folder { children, .. } = node {
+            removed |= remove_from_folders(children, id);
+        }
+    }
+    removed
 }
 
 impl Default for HomeState {
@@ -347,6 +362,7 @@ impl Default for HomeState {
             liked_status: HashMap::new(),
             artists: ListStore::new(),
             artists_cursor: Some(String::new()),
+            playlist_folders: None,
         }
     }
 }
@@ -478,7 +494,18 @@ impl UpdatableState for HomeState {
                     vec![BrowserEvent::SavedPlaylistsUpdated]
                 }
             }
+            BrowserAction::SetPlaylistFolders(folders) => {
+                if self.playlist_folders.as_ref() == Some(folders) {
+                    vec![]
+                } else {
+                    self.playlist_folders = Some(folders.clone());
+                    vec![BrowserEvent::SavedPlaylistsUpdated]
+                }
+            }
             BrowserAction::RemovePlaylist(id) | BrowserAction::UnsavePlaylist(id) => {
+                if let Some(folders) = self.playlist_folders.as_mut() {
+                    remove_from_folders(folders, id);
+                }
                 let position = self.playlists.iter().position(|p| p.id() == *id);
                 if let Some(position) = position {
                     self.playlists.remove(position as u32);

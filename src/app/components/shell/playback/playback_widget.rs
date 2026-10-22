@@ -52,6 +52,9 @@ mod imp {
         #[template_child]
         pub queue_button: TemplateChild<gtk::ToggleButton>,
 
+        #[template_child]
+        pub lyrics_button: TemplateChild<gtk::ToggleButton>,
+
         pub clock: Clock,
     }
 
@@ -113,6 +116,14 @@ glib::wrapper! {
 }
 
 impl PlaybackWidget {
+    pub fn connect_lyrics_clicked<F: Fn() + 'static>(&self, f: F) {
+        self.imp().lyrics_button.connect_clicked(move |_| f());
+    }
+
+    pub fn set_lyrics_shown(&self, shown: bool) {
+        self.imp().lyrics_button.set_active(shown);
+    }
+
     pub fn set_title_and_artist(&self, title: &str, artist: &str) {
         let widget = self.imp();
         widget.now_playing.set_visible(true);

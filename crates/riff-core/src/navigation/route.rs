@@ -1,6 +1,8 @@
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum HomePage {
+    /// What to listen to: recent and suggested music
     #[default]
+    Home,
     Library,
     SavedTracks,
     SavedPlaylists,
@@ -9,7 +11,8 @@ pub enum HomePage {
 }
 
 impl HomePage {
-    pub const ALL: [HomePage; 5] = [
+    pub const ALL: [HomePage; 6] = [
+        Self::Home,
         Self::Library,
         Self::SavedTracks,
         Self::SavedPlaylists,
@@ -19,6 +22,7 @@ impl HomePage {
 
     pub fn id(self) -> &'static str {
         match self {
+            Self::Home => "home",
             Self::Library => "library",
             Self::SavedTracks => "saved_tracks",
             Self::SavedPlaylists => "saved_playlists",
@@ -40,6 +44,8 @@ pub enum Route {
     Playlist(String),
     User(String),
     Search,
+    /// The lyrics of the current track
+    Lyrics,
 }
 
 impl Route {
@@ -51,6 +57,7 @@ impl Route {
             Self::Playlist(id) => format!("playlist_{id}"),
             Self::User(id) => format!("user_{id}"),
             Self::Search => "search".to_string(),
+            Self::Lyrics => "lyrics".to_string(),
         }
     }
 
@@ -66,7 +73,7 @@ impl Route {
             Self::Album(id) | Self::Artist(id) | Self::Playlist(id) | Self::User(id) => {
                 !id.is_empty()
             }
-            Self::Home(_) | Self::Search => true,
+            Self::Home(_) | Self::Search | Self::Lyrics => true,
         }
     }
 }

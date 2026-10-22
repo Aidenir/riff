@@ -84,11 +84,6 @@ impl AppAction {
     pub fn ViewUser(id: String) -> Self {
         BrowserAction::Navigate(Route::User(id)).into()
     }
-
-    #[allow(non_snake_case)]
-    pub fn ViewSearch() -> Self {
-        BrowserAction::Navigate(Route::Search).into()
-    }
 }
 
 // Actions mutate stuff, and we know what changed thanks to these events

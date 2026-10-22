@@ -87,8 +87,24 @@ template $AppHeaderBar : Adw.Bin {
 
           Adw.WindowTitle window_title {}
 
-
           $ClipBin custom_title {}
+
+          // Shown on every screen but search, which has its own entry here
+          Adw.Clamp global_search {
+            maximum-size: 480;
+            tightening-threshold: 480;
+
+            child: SearchEntry global_search_entry {
+              hexpand: true;
+              valign: center;
+              /* Translators: Placeholder of the search entry at the top of the window. */
+              placeholder-text: _("What do you want to play?");
+
+              styles [
+                "global-search",
+              ]
+            };
+          }
         }
 
         [end]

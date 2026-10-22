@@ -153,3 +153,53 @@ bottom-sheet.bottom-sheet--padded > sheet {
 .queue-page__selection-bar {
   padding-bottom: 11px;
 }
+
+/* Lyrics page */
+.lyrics__art {
+  border-radius: 8px;
+}
+
+.lyrics-page .lyrics-line {
+  font-size: 1.9em;
+  font-weight: 800;
+  line-height: 1.25;
+  opacity: 0.4;
+  transition: opacity 250ms ease;
+}
+
+.lyrics-page .lyrics-line--past {
+  opacity: 0.65;
+}
+
+.lyrics-page .lyrics-line--active {
+  opacity: 1;
+}
+
+.lyrics-page .lyrics-line:hover {
+  opacity: 0.85;
+}
+
+.lyrics-page.lyrics--unsynced .lyrics-line {
+  font-size: 1.4em;
+  opacity: 0.9;
+}
+
+/* Songs recommended under a playlist */
+.recommendations {
+  margin-top: 24px;
+}
+
+.recommendations__art {
+  border-radius: 6px;
+}
+
+/* Home page */
+.home-page__greeting {
+  font-size: 2em;
+  font-weight: 800;
+}
+
+.home-shelf__cards > button {
+  padding: 6px;
+  border-radius: 12px;
+}

@@ -4,6 +4,10 @@ using Adw 1;
 template $PlaybackWidget : Box {
   orientation: vertical;
 
+  styles [
+    "playback-bar",
+  ]
+
   Overlay seek_overlay {
     overflow: visible;
 
@@ -149,6 +153,22 @@ template $PlaybackWidget : Box {
         hexpand: true;
         halign: end;
         valign: center;
+
+        ToggleButton lyrics_button {
+          width-request: 40;
+          margin-end: 2;
+          icon-name: "lyrics-symbolic";
+          /* Translators: Tooltip of the playback bar button that shows or hides the lyrics. */
+          tooltip-text: _("Lyrics");
+          halign: end;
+          valign: center;
+          focus-on-click: false;
+          can-focus: false;
+
+          styles [
+            "flat"
+          ]
+        }
 
         ToggleButton queue_button {
           width-request: 40;

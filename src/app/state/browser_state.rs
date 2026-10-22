@@ -31,6 +31,8 @@ pub enum BrowserAction {
     AppendLibraryContent(Vec<Album>),
     SetPlaylistsContent(Vec<Playlist>),
     AppendPlaylistsContent(Vec<Playlist>),
+    /// The saved playlists as sorted into folders by the user.
+    SetPlaylistFolders(Vec<LibraryNode>),
     RemoveTracksFromPlaylist(String, Vec<String>),
     AddTracksToPlaylist(String, Vec<Track>),
     RemovePlaylist(String),
@@ -144,6 +146,7 @@ pub enum BrowserScreen {
     Artist(Box<ArtistState>),
     PlaylistDetails(Box<PlaylistDetailsState>),
     User(Box<UserState>),
+    Lyrics(LyricsState),
 }
 
 impl BrowserScreen {
@@ -159,12 +162,15 @@ impl BrowserScreen {
                 BrowserScreen::PlaylistDetails(Box::new(PlaylistDetailsState::new(id.clone())))
             }
             Route::User(id) => BrowserScreen::User(Box::new(UserState::new(id.clone()))),
+            Route::Lyrics => BrowserScreen::Lyrics(LyricsState),
         }
     }
 
     fn shows(&self, route: &Route) -> bool {
         match (self, route) {
-            (Self::Home(_), Route::Home(_)) | (Self::Search(_), Route::Search) => true,
+            (Self::Home(_), Route::Home(_))
+            | (Self::Search(_), Route::Search)
+            | (Self::Lyrics(_), Route::Lyrics) => true,
             (Self::AlbumDetails(s), Route::Album(id)) => &s.id == id,
             (Self::Artist(s), Route::Artist(id)) => &s.id == id,
             (Self::PlaylistDetails(s), Route::Playlist(id)) => &s.id == id,
@@ -182,7 +188,20 @@ impl BrowserScreen {
             Self::Artist(state) => &mut **state,
             Self::PlaylistDetails(state) => &mut **state,
             Self::User(state) => &mut **state,
+            Self::Lyrics(state) => state,
         }
+    }
+}
+
+/// The lyrics screen reads everything from the playback state.
+pub struct LyricsState;
+
+impl UpdatableState for LyricsState {
+    type Action = BrowserAction;
+    type Event = BrowserEvent;
+
+    fn update_with(&mut self, _: Cow<Self::Action>) -> Vec<Self::Event> {
+        vec![]
     }
 }
 
@@ -393,7 +412,8 @@ pub mod tests {
     use super::*;
     use riff_core::navigation::{Direction, HomePage};
 
-    const LIBRARY: Route = Route::Home(HomePage::Library);
+    // Where the app opens
+    const START: Route = Route::Home(HomePage::Home);
 
     fn artist(id: &str) -> Route {
         Route::Artist(id.to_string())
@@ -448,7 +468,7 @@ pub mod tests {
     #[test]
     fn navigating_creates_the_screen_state() {
         let mut state = BrowserState::new();
-        assert_eq!(*state.current_screen(), LIBRARY);
+        assert_eq!(*state.current_screen(), START);
 
         let events = navigate(&mut state, artist("some_id"));
 
@@ -483,7 +503,7 @@ pub mod tests {
     fn back_at_the_start_does_nothing() {
         let mut state = BrowserState::new();
         assert_eq!(back(&mut state), vec![]);
-        assert_eq!(*state.current_screen(), LIBRARY);
+        assert_eq!(*state.current_screen(), START);
     }
 
     #[test]

@@ -5,12 +5,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{
-    context_menu::build_context_menu, navigation_panel_row::NavigationPanelRow,
-    NavigationPanelDestination, NavigationPanelItem, NavigationPanelModel, LIBRARY_SECTION,
+    context_menu::build_context_menu,
+    navigation_panel_row::{NavigationPanelRow, DEPTH_INDENT},
+    NavigationPanelDestination, NavigationPanelItem, NavigationPanelModel, FOLDER, LIBRARY_SECTION,
     PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::components::PlaylistDialog;
-use crate::app::state::{HomePage, PlaybackEvent, Route, Transition};
+use crate::app::state::{HomePage, LoginEvent, PlaybackEvent, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
 
 pub struct NavigationPanel {
@@ -25,6 +26,9 @@ impl NavigationPanel {
     pub fn new(listbox: gtk::ListBox, model: Rc<NavigationPanelModel>) -> Self {
         let list_store = gio::ListStore::new::<NavigationPanelItem>();
 
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::Home,
+        ));
         list_store.append(&NavigationPanelItem::from_destination(
             NavigationPanelDestination::NowPlaying,
         ));
@@ -41,6 +45,7 @@ impl NavigationPanel {
             NavigationPanelDestination::SavedTracks,
         ));
         list_store.append(&NavigationPanelItem::playlists_section());
+        let num_fixed_entries = list_store.n_items();
 
         let weak_model = Rc::downgrade(&model);
         listbox.bind_model(Some(&list_store), move |obj| {
@@ -53,6 +58,7 @@ impl NavigationPanel {
                         Self::make_section_label(item, weak_model.upgrade().as_ref())
                     }
                     PINNED_SECTION | LIBRARY_SECTION => Self::make_section_label(item, None),
+                    FOLDER => Self::make_folder_row(item),
                     _ => unimplemented!(),
                 }
             }
@@ -61,7 +67,32 @@ impl NavigationPanel {
         listbox.connect_row_activated(clone!(
             #[weak]
             model,
+            #[weak]
+            list_store,
             move |listbox, row| {
+                let folder = list_store
+                    .item(row.index().max(0) as u32)
+                    .and_downcast::<NavigationPanelItem>()
+                    .filter(|item| item.id() == FOLDER);
+                if let Some(folder) = folder {
+                    // Rows change under the pointer: keep the list where it is
+                    let index = row.index();
+                    let scroller = listbox
+                        .ancestor(gtk::ScrolledWindow::static_type())
+                        .and_downcast::<gtk::ScrolledWindow>();
+                    let adjustment = scroller.map(|s| s.vadjustment());
+                    let scroll = adjustment.as_ref().map(|a| a.value());
+                    model.toggle_folder(&folder.data());
+                    model.apply_navigation_panel_items(&list_store, num_fixed_entries);
+                    if let Some(row) = listbox.row_at_index(index) {
+                        row.grab_focus();
+                    }
+                    if let (Some(adjustment), Some(scroll)) = (adjustment, scroll) {
+                        adjustment.set_value(scroll);
+                        glib::idle_add_local_once(move || adjustment.set_value(scroll));
+                    }
+                    return;
+                }
                 if let Some(row) = row.downcast_ref::<NavigationPanelRow>() {
                     if let Some(dest) = row.item().destination() {
                         let split = listbox
@@ -179,9 +210,8 @@ impl NavigationPanel {
             }
         ));
 
-        let num_fixed_entries = list_store.n_items();
-
         model.apply_navigation_panel_items(&list_store, num_fixed_entries);
+        model.load_folders();
 
         let panel = Self {
             listbox,
@@ -197,6 +227,42 @@ impl NavigationPanel {
     fn make_navigatable(item: &NavigationPanelItem) -> gtk::Widget {
         let row = NavigationPanelRow::new(item.clone());
         row.set_selectable(false);
+        row.upcast()
+    }
+
+    fn make_folder_row(item: &NavigationPanelItem) -> gtk::Widget {
+        let expanded = item.expanded();
+        let icon = gtk::Image::from_icon_name(if expanded {
+            "folder-open-symbolic"
+        } else {
+            "folder-symbolic"
+        });
+        let label = gtk::Label::builder()
+            .label(item.title())
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
+        let arrow = gtk::Image::from_icon_name(if expanded {
+            "pan-down-symbolic"
+        } else {
+            "pan-end-symbolic"
+        });
+        arrow.add_css_class("dim-label");
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        content.set_margin_start(item.depth() as i32 * DEPTH_INDENT);
+        content.append(&icon);
+        content.append(&label);
+        content.append(&arrow);
+
+        let row = gtk::ListBoxRow::builder()
+            .activatable(true)
+            .selectable(false)
+            .tooltip_text(item.title())
+            .child(&content)
+            .build();
+        row.add_css_class("navigation-folder");
+        row.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]);
         row.upcast()
     }
 
@@ -297,6 +363,7 @@ impl EventListener for NavigationPanel {
                 to: Route::Home(page),
                 ..
             })) => self.select_home_page(*page),
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => self.model.load_folders(),
             AppEvent::PlaybackEvent(
                 PlaybackEvent::PlaybackPaused
                 | PlaybackEvent::PlaybackResumed

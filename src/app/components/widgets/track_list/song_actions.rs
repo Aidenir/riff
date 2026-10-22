@@ -1,8 +1,17 @@
 use gio::SimpleAction;
 
+use std::sync::Arc;
+
+use gettextrs::gettext;
+
+use crate::app::components::dispatch_api_read_many;
 use crate::app::models::Track;
-use crate::app::state::{AppAction, EntryKey, PlaybackAction};
-use crate::app::Dispatcher;
+use crate::app::state::{
+    load_context, start_actions, AppAction, BrowserAction, EntryKey, HomePage, PlaybackAction,
+    Route,
+};
+use crate::app::{Dispatcher, SongsSource};
+use riff_api::ApiService;
 
 pub trait SongActions {
     fn make_queue_actions(&self, dispatcher: Dispatcher) -> Vec<SimpleAction>;
@@ -10,6 +19,7 @@ pub trait SongActions {
     fn make_link_action(&self) -> SimpleAction;
     fn make_album_action(&self, dispatcher: Dispatcher) -> SimpleAction;
     fn make_artist_actions(&self, dispatcher: Dispatcher) -> Vec<SimpleAction>;
+    fn make_radio_action(&self, api: Arc<ApiService>, dispatcher: Dispatcher) -> SimpleAction;
 }
 
 fn action(name: &str, activate: impl Fn() + 'static) -> SimpleAction {
@@ -49,6 +59,26 @@ impl SongActions for Track {
             .unwrap_or_default();
         action("view_album", move || {
             dispatcher.dispatch(AppAction::ViewAlbum(id.clone()));
+        })
+    }
+
+    /// Play a radio of songs like this one, and show it in Now Playing.
+    fn make_radio_action(&self, api: Arc<ApiService>, dispatcher: Dispatcher) -> SimpleAction {
+        let id = self.rri.id.clone();
+        let title = self.title.clone();
+        action("radio", move || {
+            let api = Arc::clone(&api);
+            let id = id.clone();
+            // translators: Name of the queue played from a track, e.g. "Heartless Radio".
+            let name = gettext("{} Radio").replace("{}", &title);
+            dispatch_api_read_many(&dispatcher, move |tag| async move {
+                let tracks = api.get_track_radio(&id, tag).await?;
+                let source = SongsSource::Radio(id);
+                let load = PlaybackAction::LoadContextSongs(source.clone(), tracks);
+                let mut actions = start_actions(false, load_context(source, Some(name), load));
+                actions.push(BrowserAction::Navigate(Route::Home(HomePage::NowPlaying)).into());
+                Ok(actions)
+            });
         })
     }
 

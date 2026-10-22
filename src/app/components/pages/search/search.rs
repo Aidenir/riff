@@ -685,7 +685,15 @@ impl EventListener for SearchResults {
     fn on_event(&mut self, app_event: &AppEvent) {
         match app_event {
             AppEvent::BrowserEvent(BrowserEvent::SearchUpdated) => {
+                // The query may come from the search entry at the top of
+                // other screens
+                let entry = self.widget.imp().search_entry.get();
+                let query = self.model.query();
+                if entry.text() != query {
+                    entry.set_text(&query);
+                }
                 self.get_root_widget().grab_focus();
+                entry.set_position(-1);
                 self.trigger_search();
             }
             AppEvent::BrowserEvent(BrowserEvent::SearchFilterChanged) => {

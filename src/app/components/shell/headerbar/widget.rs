@@ -76,6 +76,12 @@ mod imp {
         pub custom_title: TemplateChild<libadwaita::Bin>,
 
         #[template_child]
+        pub global_search: TemplateChild<libadwaita::Clamp>,
+
+        #[template_child]
+        pub global_search_entry: TemplateChild<gtk::SearchEntry>,
+
+        #[template_child]
         pub page_buttons: TemplateChild<gtk::Box>,
 
         pub pages: RefCell<HashMap<String, PageState>>,
@@ -302,6 +308,15 @@ impl AppHeaderBar {
                     imp.custom_title.set_child(Some(widget));
                 }
                 imp.title_stack.set_visible_child(&*imp.custom_title);
+            }
+            None if page.is_some() => {
+                imp.custom_title.set_child(None::<&gtk::Widget>);
+                // Empty again when coming back from the search screen
+                let shown = imp.title_stack.visible_child();
+                if shown.as_ref() != Some(imp.global_search.upcast_ref()) {
+                    imp.global_search_entry.set_text("");
+                }
+                imp.title_stack.set_visible_child(&*imp.global_search);
             }
             None => {
                 imp.custom_title.set_child(None::<&gtk::Widget>);
@@ -614,6 +629,20 @@ impl AppHeaderBar {
 
     pub fn connect_select_all<F: Fn() + 'static>(&self, f: F) {
         self.imp().select_all.connect_clicked(move |_| f());
+    }
+
+    /// Typing in the search entry at the top hands the query to `f`: the
+    /// search screen takes over with its own entry. Until it shows, more
+    /// typing still lands here, so the whole query is handed each time.
+    pub fn connect_global_search<F: Fn(String) + 'static>(&self, f: F) {
+        self.imp()
+            .global_search_entry
+            .connect_changed(move |entry| {
+                let query = entry.text();
+                if !query.trim().is_empty() {
+                    f(query.to_string());
+                }
+            });
     }
 
     pub fn connect_selection_cancel<F: Fn() + 'static>(&self, f: F) {

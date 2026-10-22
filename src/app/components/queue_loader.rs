@@ -25,7 +25,7 @@ async fn get_page(
         SongsSource::Playlist(id) => api.get_playlist_tracks(id, offset, limit, load).await,
         SongsSource::Album(id) => api.get_album_tracks(id, offset, limit, load).await,
         SongsSource::SavedTracks => api.get_saved_tracks(offset, limit, load).await,
-        SongsSource::Artist(_) | SongsSource::Search(_) => {
+        SongsSource::Artist(_) | SongsSource::Search(_) | SongsSource::Radio(_) => {
             unreachable!("{:?} isn't paginated", source)
         }
     }

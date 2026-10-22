@@ -152,6 +152,27 @@ pub trait MusicProvider: Send + Sync + 'static {
     async fn player_shuffle(&self, device_id: &str, state: bool) -> Result<(), DomainError>;
     async fn player_volume(&self, device_id: &str, volume_percent: u8) -> Result<(), DomainError>;
 
+    /// The user's playlists, sorted into their folders.
+    async fn get_library_tree(&self, user_id: &str) -> Result<Vec<LibraryNode>, DomainError>;
+    async fn get_lyrics(&self, track_id: &str) -> Result<Lyrics, DomainError>;
+    /// Ids of tracks suggested to extend a playlist.
+    async fn get_playlist_suggestions(
+        &self,
+        id: &str,
+        skip: &[String],
+        count: usize,
+    ) -> Result<Vec<String>, DomainError>;
+    /// Ids of the tracks of a radio started from a track.
+    async fn get_track_radio(&self, track_id: &str) -> Result<Vec<String>, DomainError>;
+    async fn get_tracks(&self, ids: &[String]) -> Result<Vec<Track>, DomainError>;
+    async fn get_recently_played(&self, limit: usize) -> Result<Vec<PlayHistoryItem>, DomainError>;
+    async fn get_top_artists(&self, limit: usize) -> Result<Vec<Artist>, DomainError>;
+    async fn get_category_playlists(
+        &self,
+        category: &str,
+        limit: usize,
+    ) -> Result<Vec<Playlist>, DomainError>;
+
     /// Drop any cached auth configuration (e.g. after a 401).
     fn invalidate_config(&self);
 }

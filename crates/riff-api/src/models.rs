@@ -332,6 +332,56 @@ pub struct Queue {
     pub items: Vec<Track>,
 }
 
+/// An entry of the user's playlist library, arranged in folders as the
+/// official clients show it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LibraryNode {
+    Folder {
+        id: String,
+        name: String,
+        children: Vec<LibraryNode>,
+    },
+    Playlist {
+        id: String,
+        /// Only known when the provider returned it with the library.
+        name: Option<String>,
+    },
+}
+
+impl LibraryNode {
+    /// The playlist ids under this node, depth first.
+    pub fn playlist_ids(&self) -> Vec<&str> {
+        match self {
+            Self::Playlist { id, .. } => vec![id.as_str()],
+            Self::Folder { children, .. } => {
+                children.iter().flat_map(|c| c.playlist_ids()).collect()
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LyricsLine {
+    pub start_ms: u32,
+    pub words: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lyrics {
+    /// Whether the lines carry real start times; unsynced lyrics only have
+    /// their text.
+    pub synced: bool,
+    pub lines: Vec<LyricsLine>,
+    pub provider: Option<String>,
+}
+
+/// Something the user listened to recently, and the context it was played in.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayHistoryItem {
+    pub track: Track,
+    pub context_uri: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -77,6 +77,11 @@ impl PlaybackState {
         self.is_playing && self.queue.current().is_some()
     }
 
+    /// Where playback is in the current track, in milliseconds.
+    pub fn position_ms(&self) -> u64 {
+        self.seek_position.current()
+    }
+
     pub fn is_shuffled(&self) -> bool {
         self.queue.is_shuffled()
     }

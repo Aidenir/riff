@@ -12,6 +12,7 @@ pub struct HomePane {
 
 impl HomePane {
     pub fn new(listbox: gtk::ListBox, screen_factory: &ScreenFactory) -> Self {
+        let home_feed = screen_factory.make_home_feed();
         let library = screen_factory.make_library();
         let saved_playlists = screen_factory.make_saved_playlists();
         let saved_tracks = screen_factory.make_saved_tracks();
@@ -23,6 +24,7 @@ impl HomePane {
         stack.set_transition_type(gtk::StackTransitionType::Crossfade);
 
         for (page, widget) in [
+            (HomePage::Home, home_feed.get_root_widget()),
             (HomePage::Library, library.get_root_widget()),
             (HomePage::SavedTracks, saved_tracks.get_root_widget()),
             (HomePage::SavedPlaylists, saved_playlists.get_root_widget()),
@@ -37,6 +39,7 @@ impl HomePane {
             stack,
             components: vec![
                 Box::new(navigation_panel),
+                Box::new(home_feed),
                 Box::new(library),
                 Box::new(saved_playlists),
                 Box::new(saved_tracks),

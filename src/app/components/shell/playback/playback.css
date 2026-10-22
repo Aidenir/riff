@@ -1,3 +1,9 @@
+/* The bar stays black in both color schemes, so it is styled as dark */
+.playback-bar {
+  background-color: #000000;
+  color: #ffffff;
+}
+
 .seek-bar {
   padding: 0;
   margin: -16px -12px -16px -12px;

@@ -123,6 +123,7 @@ impl Navigation {
                 Box::new(self.screen_factory.make_playlist_details(id.to_owned()))
             }
             Route::User(id) => Box::new(self.screen_factory.make_user_details(id.to_owned())),
+            Route::Lyrics => Box::new(self.screen_factory.make_lyrics()),
         }
     }
 

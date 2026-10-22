@@ -425,6 +425,14 @@ impl CardWidget {
                     ctx.spawn_local_with_priority(glib::Priority::DEFAULT_IDLE, load);
                 });
             }
+        } else {
+            // Without artwork, nothing else would show the labels
+            imp.title_label.set_label(&model.title());
+            imp.subtitle_label.set_label(&model.subtitle());
+            imp.subtitle_label.set_visible(!model.subtitle().is_empty());
+            self.set_tooltip_text(Some(&model.title()));
+            set_missing_art(&*imp.cover_image, true);
+            self.set_loaded();
         }
     }
 }

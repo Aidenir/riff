@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::app::components::EventListener;
 use crate::app::models::*;
 use crate::app::state::{HomePage, PlaybackAction, PlaybackEvent, Route, SelectionEvent};
-use crate::app::{AppEvent, AppModel, AppState, BrowserAction, Dispatcher};
+use crate::app::{AppEvent, AppModel, AppState, BrowserAction, BrowserEvent, Dispatcher};
 
 use super::playback_widget::PlaybackWidget;
 use super::{BarTrack, QueueBarWidget};
@@ -33,6 +33,19 @@ impl PlaybackModel {
     fn go_home(&self) {
         self.dispatcher
             .dispatch(BrowserAction::Navigate(Route::Home(HomePage::NowPlaying)).into());
+    }
+
+    fn lyrics_shown(&self) -> bool {
+        *self.state().browser.current_screen() == Route::Lyrics
+    }
+
+    fn toggle_lyrics(&self) {
+        let action = if self.lyrics_shown() {
+            BrowserAction::NavigationBack
+        } else {
+            BrowserAction::Navigate(Route::Lyrics)
+        };
+        self.dispatcher.dispatch(action.into());
     }
 
     fn is_playing(&self) -> bool {
@@ -128,6 +141,11 @@ impl PlaybackControl {
             #[weak]
             model,
             move || model.go_home()
+        ));
+        widget.connect_lyrics_clicked(clone!(
+            #[weak]
+            model,
+            move || model.toggle_lyrics()
         ));
         widget.connect_volume_changed(clone!(
             #[weak]
@@ -238,6 +256,9 @@ impl EventListener for PlaybackControl {
             }
             AppEvent::PlaybackEvent(PlaybackEvent::VolumeSet(value)) => {
                 self.widget.set_volume(*value)
+            }
+            AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(_)) => {
+                self.widget.set_lyrics_shown(self.model.lyrics_shown());
             }
             AppEvent::ConnectionLostChanged(lost) => {
                 self.set_connection_lost(*lost);

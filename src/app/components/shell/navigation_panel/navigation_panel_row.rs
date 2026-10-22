@@ -4,6 +4,9 @@ use gtk::CompositeTemplate;
 
 use super::{NavigationPanelDestination, NavigationPanelItem};
 
+/// Indentation of the playlists in a folder, per level
+pub const DEPTH_INDENT: i32 = 18;
+
 impl NavigationPanelRow {
     pub fn new(item: NavigationPanelItem) -> Self {
         glib::Object::builder().property("item", item).build()
@@ -43,6 +46,9 @@ mod imp {
             self.icon.set_visible(!now_playing);
             self.now_playing_icon.set_visible(now_playing);
             self.obj().set_tooltip_text(Some(item.title().as_str()));
+            if let Some(content) = self.obj().child() {
+                content.set_margin_start(item.depth() as i32 * DEPTH_INDENT);
+            }
             self.item.replace(item);
         }
     }

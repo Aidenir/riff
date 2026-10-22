@@ -7,8 +7,8 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 use libadwaita::subclass::prelude::*;
 
-use crate::app::components::display_add_css_provider;
 use crate::app::components::utils::{decode_px, set_missing_art};
+use crate::app::components::{art_tint, display_add_css_provider};
 use crate::app::load;
 use crate::app::models::ImageSet;
 use riff_api::models::is_resource_url;
@@ -133,6 +133,7 @@ impl DetailsPage {
             glib::MainContext::default().spawn_local(async move {
                 let texture = api_service.load_image(&url, size, size, tag).await;
                 if let (Some(scroll_child), Some(ref texture)) = (weak.upgrade(), texture) {
+                    art_tint::tint_with_art(&scroll_child, texture);
                     if let Some(header) = weak_header.upgrade() {
                         let imp = header.imp();
                         imp.image.set_paintable(Some(texture));

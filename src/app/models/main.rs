@@ -3,8 +3,8 @@
 // re-exported from `riff_api::models` so the rest of the app can refer to them
 // as `crate::app::models::*`.
 pub use riff_api::models::{
-    Album, AlbumType, Artist, ArtistRef, ContentRating, Device, DeviceKind, ImageSet, Page,
-    PlayerState, Playlist, RepeatMode, ResourceId, SearchResults, Track, User,
+    Album, AlbumType, Artist, ArtistRef, ContentRating, Device, DeviceKind, ImageSet, LibraryNode,
+    Lyrics, Page, PlayerState, Playlist, RepeatMode, ResourceId, SearchResults, Track, User,
 };
 pub use riff_core::play_queue::{PageRequest, SongsSource};
 

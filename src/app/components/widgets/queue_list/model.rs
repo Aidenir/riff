@@ -312,6 +312,7 @@ impl TrackListModel for QueueListModel {
         }
         group.add_action(&song.make_album_action(dispatcher.clone()));
         group.add_action(&song.make_link_action());
+        group.add_action(&song.make_radio_action(self.base.app_model.api(), dispatcher.clone()));
         let actions = match queue_entry(row) {
             Some((key, QueueRole::Queued)) => {
                 song.make_queue_entry_actions(key, dispatcher.clone())

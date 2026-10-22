@@ -7,6 +7,8 @@ pub enum SongsSource {
     SavedTracks,
     /// Search results, by query.
     Search(String),
+    /// A radio started from a track, by the track's id.
+    Radio(String),
 }
 
 impl SongsSource {
@@ -27,7 +29,7 @@ impl SongsSource {
             Self::Playlist(id) => ("playlist", id),
             Self::Album(id) => ("album", id),
             Self::Artist(id) => ("artist", id),
-            Self::SavedTracks | Self::Search(_) => return None,
+            Self::SavedTracks | Self::Search(_) | Self::Radio(_) => return None,
         };
         Some(format!("https://open.spotify.com/{}/{}", kind, id))
     }

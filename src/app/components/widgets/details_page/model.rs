@@ -283,6 +283,7 @@ impl DetailsPageModel {
             group.add_action(&song.make_album_action(self.dispatcher.clone()));
         }
         group.add_action(&song.make_link_action());
+        group.add_action(&song.make_radio_action(self.app_model.api(), self.dispatcher.clone()));
         for action in song.make_queue_actions(self.dispatcher.clone()) {
             group.add_action(&action);
         }

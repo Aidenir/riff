@@ -240,7 +240,7 @@ mod tests {
         nav.entries().iter().map(|e| e.route.clone()).collect()
     }
 
-    const HOME: Route = Route::Home(HomePage::Library);
+    const HOME: Route = Route::Home(HomePage::Home);
 
     #[test]
     fn revisiting_a_screen_adds_an_entry() {
