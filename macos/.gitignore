@@ -1,0 +1,6 @@
+/.build/
+/build/
+/Sources/RiffFFI/include/
+/Sources/RiffCore/
+/Resources/*.lproj/
+/Resources/AppIcon.icns

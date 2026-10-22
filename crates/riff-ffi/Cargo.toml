@@ -1,0 +1,38 @@
+[package]
+name = "riff-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Swift bindings over the Riff core, used by the macOS client."
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+name = "riff_ffi"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+riff-api = { path = "../riff-api", default-features = false }
+riff-auth = { path = "../riff-auth", default-features = false }
+riff-config = { path = "../riff-config", default-features = false }
+riff-core = { path = "../riff-core" }
+riff-player = { path = "../riff-player", features = ["rodio-backend"] }
+uniffi = { version = "0.32", features = ["tokio", "cli"] }
+futures = "0.3.18"
+log = "0.4.17"
+env_logger = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.96"
+thiserror = "2.0.20"
+url = "2.4.1"
+
+[dependencies.librespot]
+version = "0.8.0"
+default-features = false
+features = ["native-tls"]
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "rt-multi-thread", "macros", "sync", "time"]

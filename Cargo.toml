@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/riff-auth", "crates/riff-api", "crates/riff-audio-engine", "crates/riff-config", "crates/riff-core", "crates/riff-player", "generated/spotify-api"]
+members = ["crates/riff-auth", "crates/riff-api", "crates/riff-audio-engine", "crates/riff-config", "crates/riff-core", "crates/riff-player", "crates/riff-ffi", "generated/spotify-api"]
 resolver = "2"
 
 [package]
