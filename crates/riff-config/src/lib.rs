@@ -9,4 +9,5 @@
 
 pub mod api;
 pub mod feature_flags;
+#[cfg(feature = "gsettings")]
 pub mod settings;

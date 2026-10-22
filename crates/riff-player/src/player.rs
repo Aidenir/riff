@@ -18,8 +18,8 @@ use librespot::playback::config::{
 };
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
-use crate::app::models::RepeatMode;
-use crate::player::AppPlayerDelegate;
+use crate::PlayerDelegate;
+use riff_api::RepeatMode;
 use riff_audio_engine::{
     CaptureSink, EqController, EqProcessor, MixController, MixProcessor, MonoController,
     MonoProcessor, PanController, PanProcessor, PitchController, PitchProcessor, ProcessorChain,
@@ -30,11 +30,11 @@ use riff_auth::{
 };
 
 use super::Command;
-use crate::settings::RiffSettings;
 use riff_auth as credentials;
 use std::env;
 use std::error::Error;
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -84,6 +84,9 @@ const CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD: u32 = 10;
 pub enum AudioBackend {
     PulseAudio,
     Alsa(String),
+    /// librespot's default backend for the platform (CoreAudio via rodio on
+    /// macOS).
+    System,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -317,13 +320,13 @@ pub struct SpotifyPlayer {
     explicit_filter_locked: bool,
 
     // Receives feedback from commands or various events in the player
-    delegate: AppPlayerDelegate,
+    delegate: Arc<dyn PlayerDelegate>,
 }
 
 impl SpotifyPlayer {
     pub fn new(
         settings: SpotifyPlayerSettings,
-        delegate: AppPlayerDelegate,
+        delegate: Arc<dyn PlayerDelegate>,
         token_store: TokenStore,
         session_tokens: SessionTokens,
         command_sender: UnboundedSender<Command>,
@@ -476,9 +479,9 @@ impl SpotifyPlayer {
             Command::MarkPlaybackVerified => {
                 // A track played, so this account is not DRM-blocked; persist it once.
                 if let Some(user_id) = self.current_user_id.as_deref() {
-                    if !user_id.is_empty() && crate::settings::drm_verified_user() != user_id {
+                    if !user_id.is_empty() && self.delegate.drm_verified_user() != user_id {
                         info!("Recording account as verified playable");
-                        crate::settings::set_drm_verified_user(user_id);
+                        self.delegate.set_drm_verified_user(user_id);
                     }
                 }
                 Ok(())
@@ -527,7 +530,7 @@ impl SpotifyPlayer {
                     "Restoring session (token expires at {:?})",
                     credentials.token_expiry_time
                 );
-                if !session_cache_usable() {
+                if !session_cache_usable(&*self.delegate) {
                     info!("No usable session credentials on disk; showing login");
                     return Err(SpotifyError::LoggedOut);
                 }
@@ -580,8 +583,7 @@ impl SpotifyPlayer {
                 self.begin_login(login.web_api, Some(login.session)).await
             }
             Command::ReloadSettings => {
-                let settings = RiffSettings::new_from_gsettings().unwrap_or_default();
-                self.settings = settings.player_settings;
+                self.settings = self.delegate.load_settings().unwrap_or_default();
 
                 // Clear the mixer so it gets recreated with updated volume curve/dB range
                 self.mixer.take();
@@ -684,7 +686,7 @@ impl SpotifyPlayer {
             Command::DevResetDrmVerification => {
                 warn!("[dev] Clearing verified-playable marker and re-arming DRM detection");
                 // Forget the persisted known-good account.
-                crate::settings::clear_drm_verified_user();
+                self.delegate.clear_drm_verified_user();
                 // Re-arm detection for the current session.
                 self.has_played_since_login.store(false, Ordering::Relaxed);
                 self.consecutive_load_failures.store(0, Ordering::Relaxed);
@@ -722,7 +724,7 @@ impl SpotifyPlayer {
         // account starts as "already played" so its unavailable tracks aren't
         // mistaken for a DRM block.
         let known_good =
-            !profile.user_id.is_empty() && crate::settings::drm_verified_user() == profile.user_id;
+            !profile.user_id.is_empty() && self.delegate.drm_verified_user() == profile.user_id;
         self.current_user_id = Some(profile.user_id.clone());
         self.has_played_since_login
             .store(known_good, Ordering::Relaxed);
@@ -750,11 +752,12 @@ impl SpotifyPlayer {
                     .save_session_credentials(&session_credentials)
                     .await;
                 let session = connect_session_from_token(
+                    &*self.delegate,
                     &session_credentials.access_token,
                     self.settings.ap_port,
                 )
                 .await?;
-                note_session_minted();
+                note_session_minted(&*self.delegate);
                 session
             }
             None => {
@@ -762,7 +765,7 @@ impl SpotifyPlayer {
                     "Reusing cached session credentials (ap_port: {:?})",
                     self.settings.ap_port
                 );
-                connect_session_from_cache(self.settings.ap_port).await?
+                connect_session_from_cache(&*self.delegate, self.settings.ap_port).await?
             }
         };
         self.finish_login(session);
@@ -910,18 +913,19 @@ impl SpotifyPlayer {
         self.connection_lost.store(true, Ordering::Relaxed);
         self.delegate.set_connection_lost(true);
 
-        let new_session = match connect_session_from_cache(self.settings.ap_port).await {
-            Ok(s) => s,
-            Err(SpotifyError::LoggedOut) => {
-                error!("Cannot rebuild session: no usable cached session credentials");
-                return Err(SpotifyError::LoggedOut);
-            }
-            Err(e) => {
-                error!("Session rebuild failed: {e:?}");
-                self.schedule_reconnect_retry();
-                return Err(e);
-            }
-        };
+        let new_session =
+            match connect_session_from_cache(&*self.delegate, self.settings.ap_port).await {
+                Ok(s) => s,
+                Err(SpotifyError::LoggedOut) => {
+                    error!("Cannot rebuild session: no usable cached session credentials");
+                    return Err(SpotifyError::LoggedOut);
+                }
+                Err(e) => {
+                    error!("Session rebuild failed: {e:?}");
+                    self.schedule_reconnect_retry();
+                    return Err(e);
+                }
+            };
 
         info!("Session rebuilt successfully");
         let player_recreated = self.install_session(new_session);
@@ -1084,6 +1088,11 @@ impl SpotifyPlayer {
                     let backend = audio_backend::find(Some("alsa".to_string())).unwrap();
                     backend(Some(device), audio_format)
                 }
+                AudioBackend::System => {
+                    info!("using the default audio backend");
+                    let backend = audio_backend::find(None).unwrap();
+                    backend(None, audio_format)
+                }
             };
 
             // Route decoded audio through the audio engine pipeline before it
@@ -1114,12 +1123,8 @@ impl SpotifyPlayer {
 
 const KNOWN_AP_PORTS: [Option<u16>; 4] = [None, Some(80), Some(443), Some(4070)];
 
-fn librespot_cache_root() -> std::path::PathBuf {
-    glib::user_cache_dir().join("riff").join("librespot")
-}
-
-pub fn clear_audio_cache() {
-    let audio_dir = librespot_cache_root().join("audio");
+pub fn clear_audio_cache(librespot_cache_root: &Path) {
+    let audio_dir = librespot_cache_root.join("audio");
     if let Err(e) = std::fs::remove_dir_all(&audio_dir) {
         if e.kind() != std::io::ErrorKind::NotFound {
             warn!("Failed to clear librespot audio cache: {e}");
@@ -1127,37 +1132,40 @@ pub fn clear_audio_cache() {
     }
 }
 
-fn open_librespot_cache() -> Option<Cache> {
-    let root = librespot_cache_root();
+fn open_librespot_cache(delegate: &dyn PlayerDelegate) -> Option<Cache> {
+    let root = delegate.librespot_cache_root();
     Cache::new(
         Some(root.join("credentials")),
         Some(root.join("volume")),
         Some(root.join("audio")),
-        Some(crate::settings::audio_cache_size_limit_bytes()),
+        Some(delegate.audio_cache_size_limit_bytes()),
     )
     .map_err(|e| dbg!(e))
     .ok()
 }
 
-fn session_minted_by_path() -> std::path::PathBuf {
-    librespot_cache_root().join("credentials").join("minted-by")
+fn session_minted_by_path(delegate: &dyn PlayerDelegate) -> PathBuf {
+    delegate
+        .librespot_cache_root()
+        .join("credentials")
+        .join("minted-by")
 }
 
-fn note_session_minted() {
-    if let Err(e) = std::fs::write(session_minted_by_path(), SESSION_CLIENT_ID) {
+fn note_session_minted(delegate: &dyn PlayerDelegate) {
+    if let Err(e) = std::fs::write(session_minted_by_path(delegate), SESSION_CLIENT_ID) {
         warn!("Cannot note which client id minted the session credentials: {e}");
     }
 }
 
-fn session_cache_usable() -> bool {
-    let Some(cache) = open_librespot_cache() else {
+fn session_cache_usable(delegate: &dyn PlayerDelegate) -> bool {
+    let Some(cache) = open_librespot_cache(delegate) else {
         return false;
     };
     if cache.credentials().is_none() {
         return false;
     }
     minted_the_session_way(
-        std::fs::read_to_string(session_minted_by_path())
+        std::fs::read_to_string(session_minted_by_path(delegate))
             .ok()
             .as_deref(),
     )
@@ -1167,22 +1175,27 @@ fn minted_the_session_way(noted: Option<&str>) -> bool {
     noted.is_some_and(|noted| noted.trim() == SESSION_CLIENT_ID)
 }
 
-async fn connect_session_from_cache(ap_port: Option<u16>) -> Result<Session, SpotifyError> {
-    let credentials = open_librespot_cache()
+async fn connect_session_from_cache(
+    delegate: &dyn PlayerDelegate,
+    ap_port: Option<u16>,
+) -> Result<Session, SpotifyError> {
+    let credentials = open_librespot_cache(delegate)
         .and_then(|cache| cache.credentials())
         .ok_or(SpotifyError::LoggedOut)?;
-    create_session(&credentials, ap_port, false).await
+    create_session(delegate, &credentials, ap_port, false).await
 }
 
 async fn connect_session_from_token(
+    delegate: &dyn PlayerDelegate,
     access_token: &str,
     ap_port: Option<u16>,
 ) -> Result<Session, SpotifyError> {
     let credentials = Credentials::with_access_token(access_token);
-    create_session(&credentials, ap_port, true).await
+    create_session(delegate, &credentials, ap_port, true).await
 }
 
 async fn create_session_with_port(
+    delegate: &dyn PlayerDelegate,
     credentials: &Credentials,
     ap_port: Option<u16>,
     store_credentials: bool,
@@ -1191,7 +1204,7 @@ async fn create_session_with_port(
         ap_port,
         ..Default::default()
     };
-    let cache = open_librespot_cache();
+    let cache = open_librespot_cache(delegate);
     debug!("Connecting librespot session (ap_port={:?})", ap_port);
     let session = Session::new(session_config, cache);
     match session
@@ -1222,6 +1235,7 @@ async fn create_session_with_port(
 }
 
 async fn create_session(
+    delegate: &dyn PlayerDelegate,
     credentials: &Credentials,
     ap_port: Option<u16>,
     store_credentials: bool,
@@ -1234,13 +1248,20 @@ async fn create_session(
     }
 
     match ap_port {
-        Some(_) => create_session_with_port(credentials, ap_port, store_credentials).await,
+        Some(_) => {
+            create_session_with_port(delegate, credentials, ap_port, store_credentials).await
+        }
         None => {
             let mut ports_to_try = KNOWN_AP_PORTS.iter();
             loop {
                 if let Some(next_port) = ports_to_try.next() {
-                    let res =
-                        create_session_with_port(credentials, *next_port, store_credentials).await;
+                    let res = create_session_with_port(
+                        delegate,
+                        credentials,
+                        *next_port,
+                        store_credentials,
+                    )
+                    .await;
                     match res {
                         Err(SpotifyError::TechnicalError) => continue,
                         _ => break res,
@@ -1255,7 +1276,7 @@ async fn create_session(
 
 async fn player_setup_delegate(
     mut channel: PlayerEventChannel,
-    delegate: AppPlayerDelegate,
+    delegate: Arc<dyn PlayerDelegate>,
     command_sender: UnboundedSender<Command>,
     last_position_ms: Arc<AtomicU32>,
     connection_lost: Arc<AtomicBool>,

@@ -6,13 +6,24 @@ license = "MIT"
 description = "Riff's API layer for music providers."
 
 [features]
+default = ["gtk"]
+# Decodes artwork into GDK textures and localises default labels with gettext.
+# Without it (the macOS client) images are handed out as raw encoded bytes.
+gtk = [
+    "dep:glib",
+    "dep:gdk-pixbuf",
+    "dep:gdk",
+    "dep:gettext-rs",
+    "riff-auth/secret-service",
+    "riff-config/gsettings",
+]
 # Allows RIFF_ACCEPT_INVALID_CERTS to disable certificate validation in debug
 # builds. Off by default so release builds do not carry the capability.
 insecure-tls = []
 
 [dependencies]
-riff-auth = { path = "../riff-auth" }
-riff-config = { path = "../riff-config" }
+riff-auth = { path = "../riff-auth", default-features = false }
+riff-config = { path = "../riff-config", default-features = false }
 spotify-api = { path = "../../generated/spotify-api" }
 
 serde_json = "1.0.96"
@@ -24,8 +35,9 @@ http = "1.3"
 
 reqwest = { version = "0.12", features = ["gzip"] }
 reqwest-middleware = "0.4"
-glib = "0.22.10"
-gdk-pixbuf = "0.22.0"
+glib = { version = "0.22.10", optional = true }
+gdk-pixbuf = { version = "0.22.0", optional = true }
+base64 = "0.22"
 futures = "0.3.18"
 uuid = { version = "1.18", features = ["v5"] }
 prost = "0.14"
@@ -37,6 +49,7 @@ features = ["derive"]
 [dependencies.gdk]
 version = "0.11.5"
 package = "gdk4"
+optional = true
 
 [dependencies.tokio]
 version = "1"
@@ -47,6 +60,7 @@ features = ["rt", "fs", "macros", "sync", "time"]
 [dependencies.gettext-rs]
 version = "0.8.0"
 features = ["gettext-system"]
+optional = true
 
 [dev-dependencies.tokio]
 version = "1"

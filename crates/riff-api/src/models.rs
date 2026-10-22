@@ -146,7 +146,7 @@ impl ArtistRef {
     pub fn unknown() -> Self {
         ArtistRef {
             rri: ResourceId::new(Provider::Other(String::new()), String::new()),
-            name: gettextrs::gettext("Unknown Artist"),
+            name: crate::i18n::gettext("Unknown Artist"),
         }
     }
 }

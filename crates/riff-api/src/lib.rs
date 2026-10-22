@@ -5,6 +5,7 @@ pub mod models;
 
 mod defaults;
 mod error;
+mod i18n;
 mod token;
 
 pub(crate) mod cache;
@@ -18,6 +19,7 @@ pub(crate) mod service;
 #[cfg(debug_assertions)]
 pub(crate) mod dev;
 
+pub use cache::LoadedImage;
 pub use error::DomainError;
 pub use providers::spotify::domain::{check_user_profile, UserProfileCheck};
 pub use providers::spotify::spotify_service;

@@ -14,9 +14,10 @@ use riff_config::api::{
 };
 
 use futures::future::join_all;
+#[cfg(feature = "gtk")]
 use gdk::prelude::TextureExt;
 
-use crate::cache::{CacheKey, DiskCache, Store, TextureCache};
+use crate::cache::{CacheKey, DiskCache, LoadedImage, Store, TextureCache};
 use crate::error::DomainError;
 use crate::http;
 use crate::models::*;
@@ -1303,7 +1304,7 @@ impl ApiService {
         width: i32,
         height: i32,
         load: Load,
-    ) -> Option<gdk::Texture> {
+    ) -> Option<LoadedImage> {
         // Missing-artwork marker: the frontend draws its own stand-in.
         if is_resource_url(url) {
             return None;
@@ -1335,7 +1336,7 @@ impl ApiService {
         height: i32,
         load: Load,
         flight: &tokio::sync::Mutex<()>,
-    ) -> Option<gdk::Texture> {
+    ) -> Option<LoadedImage> {
         // Tier 2: Disk, one caller at a time per image.
         {
             let _guard = flight.lock().await;
@@ -1440,7 +1441,7 @@ impl ApiService {
         tex_key: &str,
         width: i32,
         height: i32,
-    ) -> Option<gdk::Texture> {
+    ) -> Option<LoadedImage> {
         if let Some(texture) = self.texture_cache.get(tex_key) {
             return Some(texture);
         }
@@ -1449,6 +1450,7 @@ impl ApiService {
             .await
     }
 
+    #[cfg(feature = "gtk")]
     async fn decode_image(
         &self,
         url: &str,
@@ -1456,7 +1458,7 @@ impl ApiService {
         bytes: Box<[u8]>,
         width: i32,
         height: i32,
-    ) -> Option<gdk::Texture> {
+    ) -> Option<LoadedImage> {
         // Decode on a blocking thread so it does not stall the frame clock.
         let byte_len = bytes.len();
         let decoded = tokio::task::spawn_blocking(move || {
@@ -1485,6 +1487,24 @@ impl ApiService {
         self.texture_cache
             .insert(tex_key.to_string(), texture.clone(), byte_size);
         Some(texture)
+    }
+
+    /// Without GTK the client decodes artwork itself, so the encoded bytes are
+    /// what gets cached and returned.
+    #[cfg(not(feature = "gtk"))]
+    async fn decode_image(
+        &self,
+        _url: &str,
+        tex_key: &str,
+        bytes: Box<[u8]>,
+        _width: i32,
+        _height: i32,
+    ) -> Option<LoadedImage> {
+        let byte_size = bytes.len();
+        let image: LoadedImage = bytes.into();
+        self.texture_cache
+            .insert(tex_key.to_string(), image.clone(), byte_size);
+        Some(image)
     }
 }
 

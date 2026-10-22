@@ -1,6 +1,8 @@
 //! Caching layer: disk TTL, texture LRU, domain object LRU.
 
+#[cfg(feature = "gtk")]
 use gdk::prelude::*;
+#[cfg(feature = "gtk")]
 use gdk_pixbuf::prelude::PixbufLoaderExt;
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +14,13 @@ pub mod texture;
 pub use disk::DiskCache;
 pub use store::Store;
 pub use texture::TextureCache;
+
+/// A loaded image as handed to the frontend: a decoded texture for GTK, the
+/// encoded bytes for clients that decode artwork themselves.
+#[cfg(feature = "gtk")]
+pub type LoadedImage = gdk::Texture;
+#[cfg(not(feature = "gtk"))]
+pub type LoadedImage = std::sync::Arc<[u8]>;
 
 /// Key identifying a cached resource.
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -53,6 +62,7 @@ impl CacheKey {
     }
 }
 
+#[cfg(feature = "gtk")]
 pub fn decode_texture(data: &[u8], width: i32, height: i32) -> Option<gdk::Texture> {
     let loader = gdk_pixbuf::PixbufLoader::new();
     loader.set_size(width, height);

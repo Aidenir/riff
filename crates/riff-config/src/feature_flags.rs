@@ -1,5 +1,7 @@
+#[cfg(feature = "gsettings")]
 use gio::prelude::SettingsExt;
 
+#[cfg(feature = "gsettings")]
 use crate::settings::SETTINGS;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,6 +49,7 @@ impl FeatureFlag {
     }
 }
 
+#[cfg(feature = "gsettings")]
 pub fn is_enabled(flag: FeatureFlag) -> bool {
     let settings = gio::Settings::new(SETTINGS);
     settings.boolean(flag.key())

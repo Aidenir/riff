@@ -44,9 +44,32 @@ pub struct DiskCache {
     root_created: Arc<Once>,
 }
 
+#[cfg(feature = "gtk")]
+fn user_cache_dir() -> PathBuf {
+    glib::user_cache_dir()
+}
+
+/// `~/Library/Caches` on macOS, falling back to the XDG location elsewhere.
+#[cfg(not(feature = "gtk"))]
+fn user_cache_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("RIFF_CACHE_DIR") {
+        return PathBuf::from(dir);
+    }
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    if cfg!(target_os = "macos") {
+        home.join("Library").join("Caches")
+    } else {
+        std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".cache"))
+    }
+}
+
 impl DiskCache {
     pub fn new(subdir: &str, max_bytes: usize, default_ttl: Duration) -> Self {
-        let root: PathBuf = glib::user_cache_dir();
+        let root: PathBuf = user_cache_dir();
         Self {
             root: root.join(subdir),
             max_bytes: Arc::new(AtomicUsize::new(max_bytes)),

@@ -1,6 +1,6 @@
 #[cfg(debug_assertions)]
 use crate::player::Command;
-use crate::settings::{RiffSettings, StateTracker};
+use crate::settings::{PlayerSettingsActions, RiffSettings, StateTracker};
 use futures::channel::mpsc::UnboundedSender;
 use gio::prelude::SettingsExt;
 use glib::object::Cast;

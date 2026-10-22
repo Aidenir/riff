@@ -3,7 +3,7 @@
 //! Every provider's conversion boundary resolves missing fields here so domain
 //! models always carry usable values.
 
-use gettextrs::gettext;
+use crate::i18n::gettext;
 
 use crate::models::ImageSet;
 

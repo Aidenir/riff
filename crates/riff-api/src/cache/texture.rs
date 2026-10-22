@@ -3,9 +3,10 @@
 use std::sync::Mutex;
 
 use super::lru::LruCache;
+use super::LoadedImage;
 
 pub struct TextureCache {
-    inner: Mutex<LruCache<String, gdk::Texture>>,
+    inner: Mutex<LruCache<String, LoadedImage>>,
 }
 
 impl TextureCache {
@@ -19,11 +20,11 @@ impl TextureCache {
         self.inner.lock().unwrap().set_max_bytes(max_bytes);
     }
 
-    pub fn get(&self, key: &str) -> Option<gdk::Texture> {
+    pub fn get(&self, key: &str) -> Option<LoadedImage> {
         self.inner.lock().unwrap().get(key).cloned()
     }
 
-    pub fn insert(&self, key: String, texture: gdk::Texture, byte_size: usize) {
+    pub fn insert(&self, key: String, texture: LoadedImage, byte_size: usize) {
         self.inner.lock().unwrap().insert(key, texture, byte_size);
     }
 
@@ -38,10 +39,16 @@ mod tests {
 
     /// Build a throwaway 1x1 texture. Uses an in-memory pixbuf, which needs no
     /// display connection, so it is safe in a headless test environment.
-    fn dummy_texture() -> gdk::Texture {
+    #[cfg(feature = "gtk")]
+    fn dummy_texture() -> LoadedImage {
         let pixbuf = gdk_pixbuf::Pixbuf::new(gdk_pixbuf::Colorspace::Rgb, true, 8, 1, 1)
             .expect("1x1 pixbuf should allocate");
         gdk::Texture::for_pixbuf(&pixbuf)
+    }
+
+    #[cfg(not(feature = "gtk"))]
+    fn dummy_texture() -> LoadedImage {
+        std::sync::Arc::from(&[0u8][..])
     }
 
     #[test]

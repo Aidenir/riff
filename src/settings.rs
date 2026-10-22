@@ -14,139 +14,145 @@ use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, Nor
 pub use riff_config::settings::*;
 
 // Player (librespot) settings
-impl SpotifyPlayerSettings {
-    fn new_from_gsettings(settings: &gio::Settings) -> Option<Self> {
-        let bitrate = match settings.enum_("player-bitrate") {
-            0 => Some(Bitrate::Bitrate96),
-            1 => Some(Bitrate::Bitrate160),
-            2 => Some(Bitrate::Bitrate320),
-            _ => None,
-        }?;
-        let backend = match settings.enum_("audio-backend") {
-            0 => Some(AudioBackend::PulseAudio),
-            1 => Some(AudioBackend::Alsa(
-                settings.string("alsa-device").as_str().to_string(),
-            )),
-            _ => None,
-        }?;
-        let gapless = settings.boolean("gapless-playback");
+fn player_settings_from_gsettings(settings: &gio::Settings) -> Option<SpotifyPlayerSettings> {
+    let bitrate = match settings.enum_("player-bitrate") {
+        0 => Some(Bitrate::Bitrate96),
+        1 => Some(Bitrate::Bitrate160),
+        2 => Some(Bitrate::Bitrate320),
+        _ => None,
+    }?;
+    let backend = match settings.enum_("audio-backend") {
+        0 => Some(AudioBackend::PulseAudio),
+        1 => Some(AudioBackend::Alsa(
+            settings.string("alsa-device").as_str().to_string(),
+        )),
+        _ => None,
+    }?;
+    let gapless = settings.boolean("gapless-playback");
 
-        let ap_port_val = settings.uint("ap-port");
-        // Access points usually use port 80, 443 or 4070. Since gsettings
-        // does not allow optional values, we use 0 to indicate that any
-        // port is OK and we should pass None to librespot's ap-port.
-        let ap_port = match ap_port_val {
-            1..=65535 => Some(ap_port_val as u16),
-            _ => None,
-        };
+    let ap_port_val = settings.uint("ap-port");
+    // Access points usually use port 80, 443 or 4070. Since gsettings
+    // does not allow optional values, we use 0 to indicate that any
+    // port is OK and we should pass None to librespot's ap-port.
+    let ap_port = match ap_port_val {
+        1..=65535 => Some(ap_port_val as u16),
+        _ => None,
+    };
 
-        let volume = settings.double("volume");
-        let shuffle = settings.boolean("shuffle");
-        let skip_explicit = settings.boolean("skip-explicit");
-        let shuffle_separation = settings.uint("shuffle-separation");
-        let repeat = match settings.string("repeat").as_str() {
-            "song" => RepeatMode::Track,
-            "playlist" => RepeatMode::Context,
-            "none" | _ => RepeatMode::Off,
-        };
+    let volume = settings.double("volume");
+    let shuffle = settings.boolean("shuffle");
+    let skip_explicit = settings.boolean("skip-explicit");
+    let shuffle_separation = settings.uint("shuffle-separation");
+    let repeat = match settings.string("repeat").as_str() {
+        "song" => RepeatMode::Track,
+        "playlist" => RepeatMode::Context,
+        "none" | _ => RepeatMode::Off,
+    };
 
-        // Volume curve
-        let volume_curve = match settings.enum_("volume-curve") {
-            0 => VolumeCurveType::Log,
-            1 => VolumeCurveType::Linear,
-            2 => VolumeCurveType::Cubic,
-            _ => VolumeCurveType::Log,
-        };
+    // Volume curve
+    let volume_curve = match settings.enum_("volume-curve") {
+        0 => VolumeCurveType::Log,
+        1 => VolumeCurveType::Linear,
+        2 => VolumeCurveType::Cubic,
+        _ => VolumeCurveType::Log,
+    };
 
-        // Normalization
-        let normalisation = settings.boolean("normalisation");
-        let normalisation_type = match settings.enum_("normalisation-type") {
-            0 => NormalisationType::Auto,
-            1 => NormalisationType::Track,
-            2 => NormalisationType::Album,
-            _ => NormalisationType::Auto,
-        };
-        let normalisation_method = match settings.enum_("normalisation-method") {
-            0 => NormalisationMethod::Dynamic,
-            1 => NormalisationMethod::Basic,
-            _ => NormalisationMethod::Dynamic,
-        };
-        let normalisation_pregain_db = settings.double("normalisation-pregain-db");
-        let normalisation_threshold_dbfs = settings.double("normalisation-threshold-dbfs");
-        let normalisation_attack_ms = settings.double("normalisation-attack-ms");
-        let normalisation_release_ms = settings.double("normalisation-release-ms");
-        let normalisation_knee_db = settings.double("normalisation-knee-db");
+    // Normalization
+    let normalisation = settings.boolean("normalisation");
+    let normalisation_type = match settings.enum_("normalisation-type") {
+        0 => NormalisationType::Auto,
+        1 => NormalisationType::Track,
+        2 => NormalisationType::Album,
+        _ => NormalisationType::Auto,
+    };
+    let normalisation_method = match settings.enum_("normalisation-method") {
+        0 => NormalisationMethod::Dynamic,
+        1 => NormalisationMethod::Basic,
+        _ => NormalisationMethod::Dynamic,
+    };
+    let normalisation_pregain_db = settings.double("normalisation-pregain-db");
+    let normalisation_threshold_dbfs = settings.double("normalisation-threshold-dbfs");
+    let normalisation_attack_ms = settings.double("normalisation-attack-ms");
+    let normalisation_release_ms = settings.double("normalisation-release-ms");
+    let normalisation_knee_db = settings.double("normalisation-knee-db");
 
-        // Audio format
-        let audio_format = match settings.enum_("audio-format") {
-            0 => AudioFormat::S16,
-            1 => AudioFormat::S24,
-            2 => AudioFormat::S24_3,
-            3 => AudioFormat::S32,
-            4 => AudioFormat::F32,
-            5 => AudioFormat::F64,
-            _ => AudioFormat::S16,
-        };
+    // Audio format
+    let audio_format = match settings.enum_("audio-format") {
+        0 => AudioFormat::S16,
+        1 => AudioFormat::S24,
+        2 => AudioFormat::S24_3,
+        3 => AudioFormat::S32,
+        4 => AudioFormat::F32,
+        5 => AudioFormat::F64,
+        _ => AudioFormat::S16,
+    };
 
-        // Equalizer (active whenever any band is non-zero)
-        let eq_bands = [
-            settings.double("eq-band-0"),
-            settings.double("eq-band-1"),
-            settings.double("eq-band-2"),
-            settings.double("eq-band-3"),
-            settings.double("eq-band-4"),
-            settings.double("eq-band-5"),
-            settings.double("eq-band-6"),
-            settings.double("eq-band-7"),
-            settings.double("eq-band-8"),
-            settings.double("eq-band-9"),
-        ];
+    // Equalizer (active whenever any band is non-zero)
+    let eq_bands = [
+        settings.double("eq-band-0"),
+        settings.double("eq-band-1"),
+        settings.double("eq-band-2"),
+        settings.double("eq-band-3"),
+        settings.double("eq-band-4"),
+        settings.double("eq-band-5"),
+        settings.double("eq-band-6"),
+        settings.double("eq-band-7"),
+        settings.double("eq-band-8"),
+        settings.double("eq-band-9"),
+    ];
 
-        // Mono audio
-        let mono_audio = settings.boolean("mono-audio");
+    // Mono audio
+    let mono_audio = settings.boolean("mono-audio");
 
-        // Stereo pan / balance (always enabled; centered has no effect)
-        let pan = settings.double("pan");
+    // Stereo pan / balance (always enabled; centered has no effect)
+    let pan = settings.double("pan");
 
-        // Pitch shift in cents (0.0 = no shift)
-        let pitch_cents = settings.double("pitch-cents");
+    // Pitch shift in cents (0.0 = no shift)
+    let pitch_cents = settings.double("pitch-cents");
 
-        Some(Self {
-            volume,
-            repeat,
-            shuffle,
+    Some(SpotifyPlayerSettings {
+        volume,
+        repeat,
+        shuffle,
 
-            skip_explicit,
-            shuffle_separation,
+        skip_explicit,
+        shuffle_separation,
 
-            bitrate,
-            backend,
-            gapless,
-            ap_port,
+        bitrate,
+        backend,
+        gapless,
+        ap_port,
 
-            volume_curve,
+        volume_curve,
 
-            normalisation,
-            normalisation_type,
-            normalisation_method,
-            normalisation_pregain_db,
-            normalisation_threshold_dbfs,
-            normalisation_attack_ms,
-            normalisation_release_ms,
-            normalisation_knee_db,
+        normalisation,
+        normalisation_type,
+        normalisation_method,
+        normalisation_pregain_db,
+        normalisation_threshold_dbfs,
+        normalisation_attack_ms,
+        normalisation_release_ms,
+        normalisation_knee_db,
 
-            audio_format,
+        audio_format,
 
-            mono_audio,
+        mono_audio,
 
-            pan,
+        pan,
 
-            pitch_cents,
+        pitch_cents,
 
-            eq_bands,
-        })
-    }
-    pub fn actions(&self) -> Vec<AppAction> {
+        eq_bands,
+    })
+}
+
+/// App actions that restore the persisted playback preferences.
+pub trait PlayerSettingsActions {
+    fn actions(&self) -> Vec<AppAction>;
+}
+
+impl PlayerSettingsActions for SpotifyPlayerSettings {
+    fn actions(&self) -> Vec<AppAction> {
         use PlaybackAction::*;
         vec![
             SetVolume(self.volume).into(),
@@ -177,7 +183,7 @@ impl RiffSettings {
         }?;
         Some(Self {
             theme_preference,
-            player_settings: SpotifyPlayerSettings::new_from_gsettings(&settings)?,
+            player_settings: player_settings_from_gsettings(&settings)?,
             window: WindowGeometry::new_from_gsettings(),
         })
     }

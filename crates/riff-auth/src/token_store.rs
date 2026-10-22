@@ -1,4 +1,5 @@
 use anyhow::Result;
+#[cfg(feature = "secret-service")]
 use oo7::Keyring;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -10,12 +11,18 @@ type Attrs = &'static [(&'static str, &'static str)];
 const ATTRS: Attrs = &[("riff", "yes")];
 // Not matched by a search for `ATTRS`, and the other way around.
 const SESSION_ATTRS: Attrs = &[("riff-session", "yes")];
+#[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+const KEYCHAIN_SERVICE: &str = "com.aidenir.Riff";
+#[cfg(feature = "secret-service")]
 const MAX_KEYRING_RETRIES: u32 = 6;
+#[cfg(feature = "secret-service")]
 // Base delay used for exponential backoff between keyring retries.
 const KEYRING_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+#[cfg(feature = "secret-service")]
 // Upper bound on the cumulative time spent sleeping across all retries.
 const KEYRING_MAX_TOTAL_DELAY: Duration = Duration::from_millis(800);
 
+#[cfg(feature = "secret-service")]
 /// Exponential backoff delay for a given (0-indexed) retry attempt.
 /// The base delay doubles on each successive attempt.
 fn backoff_delay(attempt: u32) -> Duration {
@@ -50,6 +57,7 @@ impl TokenStore {
         }))
     }
 
+    #[cfg(feature = "secret-service")]
     async fn keyring() -> Result<Keyring> {
         let mut total_delay = Duration::ZERO;
         let mut last_err = None;
@@ -73,6 +81,7 @@ impl TokenStore {
             .unwrap_or_else(|| anyhow::anyhow!("Failed to initialize keyring")))
     }
 
+    #[cfg(feature = "secret-service")]
     /// Sleep before the next retry using exponential backoff, keeping the
     /// cumulative delay within [`KEYRING_MAX_TOTAL_DELAY`]. Returns the
     /// updated total elapsed delay so the caller can carry the budget forward.
@@ -95,6 +104,7 @@ impl TokenStore {
         self.get_cached_blocking()
     }
 
+    #[cfg(feature = "secret-service")]
     async fn retrieve(&self) -> Result<Credentials> {
         let keyring = Self::keyring().await?;
         if matches!(keyring, Keyring::File(_)) {
@@ -133,6 +143,7 @@ impl TokenStore {
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to retrieve credentials")))
     }
 
+    #[cfg(feature = "secret-service")]
     // Perform a single credential lookup against the keyring.
     async fn try_retrieve(&self, keyring: &Keyring) -> Result<Credentials> {
         let items = keyring.search_items(&self.0.attrs).await?;
@@ -144,6 +155,7 @@ impl TokenStore {
         Ok(creds)
     }
 
+    #[cfg(feature = "secret-service")]
     // Try to clear the credentials
     async fn logout(&self) -> Result<()> {
         let result = Self::keyring().await?.search_items(&self.0.attrs).await?;
@@ -155,6 +167,7 @@ impl TokenStore {
         Ok(())
     }
 
+    #[cfg(feature = "secret-service")]
     async fn save(&self, creds: &Credentials) -> Result<()> {
         // We simply write our stuct as JSON and send it
         info!("Saving credentials");
@@ -164,6 +177,59 @@ impl TokenStore {
             .create_item(self.0.label, &self.0.attrs, &encoded, true)
             .await?;
         info!("Saved credentials");
+        Ok(())
+    }
+
+    /// Keychain account name, so the user and session credentials stay apart.
+    #[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+    fn keychain_account(&self) -> String {
+        self.0
+            .attrs
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    #[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+    async fn retrieve(&self) -> Result<Credentials> {
+        use security_framework::passwords::get_generic_password;
+        let bytes = get_generic_password(KEYCHAIN_SERVICE, &self.keychain_account())?;
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    #[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+    async fn logout(&self) -> Result<()> {
+        use security_framework::passwords::delete_generic_password;
+        if let Err(e) = delete_generic_password(KEYCHAIN_SERVICE, &self.keychain_account()) {
+            warn!("Logout attempted, but no keychain item was removed: {e}");
+        }
+        Ok(())
+    }
+
+    #[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+    async fn save(&self, creds: &Credentials) -> Result<()> {
+        use security_framework::passwords::set_generic_password;
+        info!("Saving credentials to the keychain ({})", self.0.label);
+        let encoded = serde_json::to_vec(creds)?;
+        set_generic_password(KEYCHAIN_SERVICE, &self.keychain_account(), &encoded)?;
+        Ok(())
+    }
+
+    /// No credential backend on this platform: credentials only live for the
+    /// session.
+    #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
+    async fn retrieve(&self) -> Result<Credentials> {
+        Err(anyhow::anyhow!("No credential store available"))
+    }
+
+    #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
+    async fn save(&self, _creds: &Credentials) -> Result<()> {
         Ok(())
     }
 
@@ -217,6 +283,7 @@ impl TokenStore {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "secret-service")]
     #[tokio::test]
     async fn retrieve_fails_with_empty_keyring_after_retries() {
         // Use a unique attribute so we never collide with real credentials
@@ -239,6 +306,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "secret-service")]
     #[tokio::test]
     async fn get_returns_none_when_keyring_empty() {
         let store = TokenStore::new();

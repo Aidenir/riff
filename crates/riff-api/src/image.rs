@@ -1,9 +1,12 @@
+#[cfg(feature = "gtk")]
 use gdk_pixbuf::prelude::*;
 
 /// Largest playlist cover accepted, counted in base64.
 const COVER_MAX_BASE64_BYTES: usize = 256 * 1024;
+#[cfg(feature = "gtk")]
 const COVER_SIZE: i32 = 640;
 
+#[cfg(feature = "gtk")]
 pub fn encode_cover(data: &[u8]) -> Option<String> {
     let loader = gdk_pixbuf::PixbufLoader::new();
     loader.write(data).ok()?;
@@ -43,7 +46,19 @@ pub fn encode_cover(data: &[u8]) -> Option<String> {
         })
 }
 
-#[cfg(test)]
+/// Without GTK the client hands over a cover it already cropped and encoded as
+/// JPEG, so it only needs base64 and the size check.
+#[cfg(not(feature = "gtk"))]
+pub fn encode_cover(data: &[u8]) -> Option<String> {
+    use base64::Engine;
+    if !data.starts_with(&[0xff, 0xd8, 0xff]) {
+        return None;
+    }
+    let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+    (encoded.len() <= COVER_MAX_BASE64_BYTES).then_some(encoded)
+}
+
+#[cfg(all(test, feature = "gtk"))]
 mod tests {
     use super::*;
 
