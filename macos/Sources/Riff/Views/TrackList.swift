@@ -40,20 +40,20 @@ struct TrackList: View {
                         if row.id == rows.count - 1 { onLoadMore?() }
                     }
             }
-            .width(min: 160, ideal: 280)
+            .width(min: 140, ideal: 240)
             TableColumn("Artist") { row in
                 Text(row.track.artistNames)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .width(min: 100, ideal: 180)
+            .width(min: 80, ideal: 150)
             if showAlbum {
                 TableColumn("Album") { row in
                     Text(row.track.album?.name ?? "")
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .width(min: 100, ideal: 180)
+                .width(min: 80, ideal: 150)
             }
             TableColumn("") { row in
                 LikeButton(track: row.track)

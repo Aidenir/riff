@@ -44,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let model = Self.model else { return }
+        // Started from a terminal (build-macos.sh --run), the app would not
+        // come to the front by itself.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
         nowPlaying = NowPlayingController(model: model)
         applyTheme(model.settings.theme)
         model.start()

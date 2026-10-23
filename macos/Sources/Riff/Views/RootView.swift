@@ -45,7 +45,9 @@ struct MainView: View {
             NavigationStack(path: $navigation.path) {
                 SectionView(item: navigation.selection ?? .home)
                     .navigationDestination(for: Route.self) { route in
+                        // The toolbar has its own back and forward buttons.
                         RouteView(route: route)
+                            .navigationBarBackButtonHidden(true)
                     }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -78,7 +80,7 @@ struct MainView: View {
                 }
                 .help("Show the queue at the side of the window")
             }
-            ToolbarItem(placement: .primaryAction) { UserMenu() }
+            ToolbarItem(placement: .primaryAction) { UserMenu(model: model) }
         }
         .sheet(item: $model.playlistEditor) { request in
             PlaylistEditor(request: request)
@@ -157,8 +159,10 @@ struct ToastStack: View {
     }
 }
 
+/// Takes the model directly: toolbar items can be rebuilt outside the
+/// window's environment, and a missing AppModel there crashes SwiftUI.
 struct UserMenu: View {
-    @Environment(AppModel.self) private var model
+    let model: AppModel
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
 

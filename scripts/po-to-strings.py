@@ -65,7 +65,15 @@ def locale_name(stem: str) -> str:
 def main() -> None:
     po_dir, out_dir = Path(sys.argv[1]), Path(sys.argv[2])
     count = 0
+    for old in out_dir.glob("*.lproj"):
+        for f in old.iterdir():
+            f.unlink()
+        old.rmdir()
     for po in sorted(po_dir.glob("*.po")):
+        # en.po renames a few GTK labels; the macOS client uses its English
+        # source strings as they are.
+        if po.stem == "en":
+            continue
         entries = parse_po(po)
         if not entries:
             continue

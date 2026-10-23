@@ -106,8 +106,9 @@ struct NowPlayingView: View {
             if let track = model.playback.current {
                 VStack(spacing: 18) {
                     ArtworkView(url: track.art.large ?? track.art.medium, priority: .hero)
-                        .frame(maxWidth: 420, maxHeight: 420)
+                        .frame(maxWidth: 380, maxHeight: 380)
                         .shadow(radius: 16)
+                        .layoutPriority(-1)
                     VStack(spacing: 4) {
                         Text(track.title)
                             .font(.title.bold())

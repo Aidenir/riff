@@ -90,6 +90,9 @@ final class AppModel {
             loginError = nil
             session = .loggedIn(username: username)
             Task { user = try? await core.currentUser() }
+            #if DEBUG
+            SmokeTest.startIfEnabled(self)
+            #endif
         case .loggedOut:
             session = .loggedOut
             user = nil

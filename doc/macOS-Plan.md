@@ -128,7 +128,7 @@ Each slice ends with the Linux build green, the Mac app building, and the parity
 
 ## Parity checklist
 
-A tick means the feature is built and compiles. Everything behind the login screen still needs a run with a Premium account (see Risks).
+A tick means the feature is built. The debug-only smoke test (`RIFF_SMOKE_TEST=1`, `macos/Sources/Riff/App/SmokeTest.swift`) walks a logged-in app through the library, album, artist, playlist and profile pages, playback (play, next, previous, pause, seek, volume, shuffle, repeat, queue), lyrics, search, home data, Connect devices and settings; it passed on a Premium account on 2026-10-23.
 
 ### Shell
 
@@ -240,8 +240,7 @@ A tick means the feature is built and compiles. Everything behind the login scre
 
 ## Risks
 
-- **Not run while logged in.** The app builds, launches and shows the login screen, but logging in needs a Spotify Premium account in a browser, so nothing behind login has been run yet. Playback through rodio, the track tables, Connect and the home shelves need a manual pass.
-- **librespot on macOS.** The `rodio` backend has not been exercised in this codebase on macOS before. The local player itself compiles and starts.
+- **Keychain prompt per build.** Ad-hoc signatures change with every build, so macOS asks again for Keychain access after each update. A Developer ID signature fixes this.
 - **Linux runtime.** The Linux build and tests pass in a Fedora 44 container, but the GTK app was not run with a display after `src/player` moved to `riff-player`. The move did not change logic.
 - **PlayPlay DRM.** Some accounts fail on Linux for this reason. The same applies on macOS and is out of scope.
 - **Unsigned distribution.** Until notarization exists, users must clear the quarantine attribute or use right-click Open.
