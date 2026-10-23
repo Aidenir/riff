@@ -88,27 +88,29 @@ fun SplashIntro(modifier: Modifier = Modifier) {
                 center = center,
             )
         }
-        // Rings rippling out from the badge.
-        Canvas(Modifier.size(360.dp)) {
-            repeat(3) { ring ->
-                val phase = (pulse + ring / 3f) % 1f
-                drawCircle(
-                    Brush.sweepGradient(listOf(colors.primary, colors.tertiary, colors.secondary, colors.primary)),
-                    radius = size.minDimension / 2 * (0.3f + 0.7f * phase),
-                    alpha = (1f - phase) * 0.6f,
-                    style = Stroke(width = (6f * (1f - phase) + 1f).dp.toPx()),
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                // Rings rippling out from the badge.
+                Canvas(Modifier.size(340.dp)) {
+                    repeat(3) { ring ->
+                        val phase = (pulse + ring / 3f) % 1f
+                        drawCircle(
+                            Brush.sweepGradient(listOf(colors.primary, colors.tertiary, colors.secondary, colors.primary)),
+                            radius = size.minDimension / 2 * (0.3f + 0.7f * phase),
+                            alpha = (1f - phase) * 0.6f,
+                            style = Stroke(width = (6f * (1f - phase) + 1f).dp.toPx()),
+                        )
+                    }
+                }
+                Image(
+                    painterResource(R.mipmap.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(240.dp)
+                        .scale(logoScale.value * breathe)
+                        .rotate(logoTurn.value),
                 )
             }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Image(
-                painterResource(R.mipmap.ic_launcher_foreground),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(220.dp)
-                    .scale(logoScale.value * breathe)
-                    .rotate(logoTurn.value),
-            )
             Row {
                 "Riff".forEachIndexed { index, char ->
                     val progress = letters[index].value

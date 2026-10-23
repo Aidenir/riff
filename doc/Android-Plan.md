@@ -170,55 +170,55 @@ Same rows as the macOS checklist, for Android.
 
 ### Shell
 
-- [ ] Bottom bar navigation with Home, Search and Library
-- [ ] System back and predictive back
-- [ ] Mini player and swipe-up Now Playing
-- [ ] Queue tab in Now Playing
-- [ ] Snackbars for notifications
-- [ ] Spotify links: intent filter and share target
-- [ ] Device selector (Spotify Connect), behind `DeviceSelector`
-- [ ] Pinned items, behind `PinnedObjects`
-- [ ] Art tint
-- [ ] About screen
+- [x] Bottom bar navigation with Home, Search and Library
+- [x] System back and predictive back
+- [x] Mini player and swipe-up Now Playing
+- [x] Queue tab in Now Playing
+- [x] Snackbars for notifications
+- [x] Spotify links: intent filter and share target
+- [x] Device selector (Spotify Connect), behind `DeviceSelector`
+- [x] Pinned items, behind `PinnedObjects`
+- [x] Art tint
+- [x] About screen
 
 ### Pages
 
-- [ ] Login
-- [ ] Home
-- [ ] Saved albums
-- [ ] Saved playlists, including folders
-- [ ] Liked songs
-- [ ] Followed artists
-- [ ] Search (all scopes)
-- [ ] Album
-- [ ] Artist
-- [ ] Playlist, including recommendations
-- [ ] Profile
-- [ ] Queue
-- [ ] Now Playing
-- [ ] Lyrics (synced)
-- [ ] Settings
+- [x] Login
+- [x] Home
+- [x] Saved albums
+- [x] Saved playlists, including folders
+- [x] Liked songs
+- [x] Followed artists
+- [x] Search (all scopes)
+- [x] Album
+- [x] Artist
+- [x] Playlist, including recommendations
+- [x] Profile
+- [x] Queue
+- [x] Now Playing
+- [x] Lyrics (synced)
+- [x] Settings
 
 ### Playback and system
 
-- [ ] Play, pause, next, previous, seek, volume
-- [ ] Shuffle with separation, repeat modes
-- [ ] Gapless playback
-- [ ] Skip explicit tracks
-- [ ] Background playback with a foreground service
-- [ ] Media notification, lock screen, Bluetooth and headset buttons
-- [ ] Audio focus (pause for calls, duck for navigation) and pause when headphones unplug
-- [ ] Credentials in the Android Keystore, kept across app updates
+- [x] Play, pause, next, previous, seek, volume
+- [x] Shuffle with separation, repeat modes
+- [x] Gapless playback
+- [x] Skip explicit tracks
+- [x] Background playback with a foreground service
+- [x] Media notification, lock screen, Bluetooth and headset buttons (media buttons and notification verified; lock screen controls are off in the test phone's settings)
+- [x] Audio focus (pause for calls, duck for navigation) and pause when headphones unplug (focus verified; calls and unplugging not tried)
+- [x] Credentials in the Android Keystore, kept across app updates
 
 ### Settings
 
-- [ ] Theme (light, dark, system)
-- [ ] Skip explicit tracks, shuffle separation
-- [ ] Audio quality, audio format, gapless, volume curve, mono
-- [ ] Normalisation (all options, behind the flag)
-- [ ] Equalizer, stereo pan, pitch shift
-- [ ] Access point port
-- [ ] Memory, disk and audio cache sizes, clear cache
+- [x] Theme (light, dark, system)
+- [x] Skip explicit tracks, shuffle separation
+- [x] Audio quality, audio format, gapless, volume curve, mono
+- [x] Normalisation (all options, behind the flag)
+- [x] Equalizer, stereo pan, pitch shift
+- [x] Access point port
+- [x] Memory, disk and audio cache sizes, clear cache
 
 Not carried over from the desktop apps: close-window behaviour, keep-awake setting (Android handles it with the playback service), queue side panel, keyboard shortcuts window.
 

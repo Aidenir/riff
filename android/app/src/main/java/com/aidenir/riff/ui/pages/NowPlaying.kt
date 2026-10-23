@@ -19,7 +19,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import com.aidenir.riff.ui.components.LocalDockColors
+import com.aidenir.riff.ui.components.WavyProgress
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -133,7 +140,7 @@ fun MiniPlayer(app: AppState, modifier: Modifier = Modifier) {
     val track = snapshot.current ?: return
     val now = rememberNow(snapshot.isPlaying, 500)
     val progress = (playback.position(now).toFloat() / track.durationMs.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
-    val accent = Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
+    val dock = LocalDockColors.current
     Column(
         modifier
             .fillMaxWidth()
@@ -143,47 +150,53 @@ fun MiniPlayer(app: AppState, modifier: Modifier = Modifier) {
             },
     ) {
         Row(
-            Modifier.padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 6.dp),
+            Modifier.padding(start = 12.dp, end = 6.dp, top = 12.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ArtworkImage(
                 app.images,
                 track.art.small ?: track.art.medium,
-                Modifier.size(46.dp).shadow(6.dp, RoundedCornerShape(12.dp)),
-                shape = RoundedCornerShape(12.dp),
+                Modifier.size(48.dp).shadow(10.dp, RoundedCornerShape(14.dp)),
+                shape = RoundedCornerShape(14.dp),
             )
             Column(Modifier.weight(1f)) {
-                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = dock.content)
                 Text(
                     track.artistNames,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = dock.secondary,
                 )
             }
-            FilledIconButton(onClick = { app.core.togglePlay() }, modifier = Modifier.size(42.dp)) {
+            FilledIconButton(
+                onClick = { app.core.togglePlay() },
+                modifier = Modifier.size(width = 56.dp, height = 44.dp),
+                shape = RoundedCornerShape(50),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = if (dock.glass) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
+                    contentColor = if (dock.glass) Color.Black else MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
                 Icon(
                     if (snapshot.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     stringResource(if (snapshot.isPlaying) R.string.pause else R.string.play),
                 )
             }
             IconButton(onClick = { app.core.next() }, enabled = snapshot.hasNext) {
-                Icon(Icons.Default.SkipNext, stringResource(R.string.next_track))
+                Icon(Icons.Default.SkipNext, stringResource(R.string.next_track), tint = dock.content)
             }
         }
-        // Progress as a glowing gradient line.
-        Box(
-            Modifier
-                .padding(horizontal = 14.dp)
-                .fillMaxWidth()
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
-        ) {
-            Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accent))
-        }
+        WavyProgress(
+            progress = progress,
+            playing = snapshot.isPlaying,
+            played = SolidColor(if (dock.glass) Color.White else MaterialTheme.colorScheme.primary),
+            remaining = dock.content.copy(alpha = 0.25f),
+            modifier = Modifier.padding(horizontal = 16.dp),
+            height = 12.dp,
+            stroke = 2.5.dp,
+        )
     }
 }
 
@@ -266,18 +279,28 @@ private fun PlayerTab(app: AppState) {
         return
     }
     val now = rememberNow(snapshot.isPlaying)
-    var seeking by remember { mutableStateOf<Float?>(null) }
     val duration = track.durationMs.toFloat().coerceAtLeast(1f)
-    val position = seeking ?: playback.position(now).toFloat().coerceIn(0f, duration)
+    val position = playback.position(now).toFloat().coerceIn(0f, duration)
     Column(
         Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly,
     ) {
+        // The cover breathes in when playing and settles back when paused.
+        val coverScale by animateFloatAsState(
+            if (snapshot.isPlaying) 1f else 0.86f,
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+            label = "cover",
+        )
         ArtworkImage(
             app.images,
             track.art.large ?: track.art.medium,
-            Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f),
+            Modifier
+                .fillMaxWidth()
+                .widthIn(max = 420.dp)
+                .aspectRatio(1f)
+                .scale(coverScale)
+                .shadow((24 * coverScale).dp, MaterialTheme.shapes.large),
             shape = MaterialTheme.shapes.large,
             priority = Priority.HERO,
         )
@@ -321,14 +344,16 @@ private fun PlayerTab(app: AppState) {
                     )
                 }
             }
-            Slider(
-                value = position,
-                onValueChange = { seeking = it },
-                onValueChangeFinished = {
-                    seeking?.let { app.core.seek(it.toLong().toUInt()) }
-                    seeking = null
-                },
-                valueRange = 0f..duration,
+            WavyProgress(
+                progress = position / duration,
+                playing = snapshot.isPlaying,
+                played = Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)),
+                remaining = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                modifier = Modifier.padding(vertical = 12.dp),
+                height = 24.dp,
+                stroke = 4.dp,
+                thumb = true,
+                onSeek = { fraction -> app.core.seek((fraction * duration).toLong().toUInt()) },
             )
             Row(Modifier.fillMaxWidth()) {
                 Text(formatDuration(position.toLong()), style = MaterialTheme.typography.bodySmall)
@@ -375,12 +400,16 @@ private fun PlayerTab(app: AppState) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.VolumeDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            var volume by remember(snapshot.volume) { mutableFloatStateOf(snapshot.volume.toFloat()) }
-            Slider(
-                value = volume,
-                onValueChange = { volume = it },
-                onValueChangeFinished = { app.core.setVolume(volume.toDouble()) },
-                modifier = Modifier.weight(1f),
+            WavyProgress(
+                progress = snapshot.volume.toFloat(),
+                playing = false,
+                played = SolidColor(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)),
+                remaining = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                height = 24.dp,
+                stroke = 4.dp,
+                thumb = true,
+                onSeek = { app.core.setVolume(it.toDouble()) },
             )
             Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }

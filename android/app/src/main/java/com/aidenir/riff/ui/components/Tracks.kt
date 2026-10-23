@@ -95,6 +95,7 @@ fun LazyListScope.trackRows(
             LaunchedEffect(tracks.size) { onLoadMore() }
         }
         TrackRow(
+            modifier = Modifier.animateItem(),
             app = app,
             track = track,
             number = if (showNumbers) (track.trackNumber?.toInt() ?: (index + 1)) else null,
