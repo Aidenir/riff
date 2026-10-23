@@ -5,6 +5,7 @@ import com.aidenir.riff.core.KeystoreSecretStore
 import com.aidenir.riff.core.NativeLib
 import com.aidenir.riff.core.Riff
 import com.aidenir.riff.ffi.CoreConfig
+import com.aidenir.riff.playback.LoginKeepAlive
 import com.aidenir.riff.playback.PlaybackController
 
 /** Creates the Rust core with the app's folders and the Keystore secret store. */
@@ -18,6 +19,7 @@ class RiffApplication : Application() {
             KeystoreSecretStore(this),
         )
         PlaybackController.install(this, state)
+        LoginKeepAlive.install(this, state)
         state.start()
     }
 }

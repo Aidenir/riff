@@ -114,6 +114,7 @@
     <string name="liked_songs">Liked Songs</string>
     <string name="log_in_with_spotify">Log in with Spotify…</string>
     <string name="log_out">Log Out</string>
+    <string name="login_channel">Logging in</string>
     <string name="login_explanation">Log in with your Spotify Account</string>
     <string name="login_failed">Login failed. Please check your connection and try again.</string>
     <string name="looking_for_devices">Looking for devices…</string>

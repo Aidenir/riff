@@ -55,6 +55,11 @@
         </activity>
 
         <service
+            android:name=".playback.LoginService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
+
+        <service
             android:name=".playback.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
