@@ -206,7 +206,7 @@ private fun Modifier.spinning(degrees: Float) = this.then(Modifier.graphicsLayer
  * flicker. Pages whose data is already there never see it.
  */
 @Composable
-fun rememberLoaderVisible(loading: Boolean, minimumMs: Long = 1500): Boolean {
+fun rememberLoaderVisible(loading: Boolean, minimumMs: Long = 800): Boolean {
     var shownSince by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(if (loading) android.os.SystemClock.elapsedRealtime() else -1L) }
     var holding by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(loading) }
     androidx.compose.runtime.LaunchedEffect(loading) {
