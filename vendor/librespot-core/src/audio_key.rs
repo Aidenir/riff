@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io::Write, time::Duration};
+use std::{
+    collections::HashMap,
+    io::Write,
+    time::{Duration, Instant},
+};
 
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::Bytes;
@@ -22,6 +26,8 @@ pub enum AudioKeyError {
     Sequence(u32),
     #[error("audio key response timeout")]
     Timeout,
+    #[error("audio keys refused recently, not asking again yet")]
+    Backoff,
 }
 
 impl From<AudioKeyError> for Error {
@@ -32,6 +38,7 @@ impl From<AudioKeyError> for Error {
             AudioKeyError::Sequence(_) => Error::aborted(err),
             AudioKeyError::Packet(_) => Error::unimplemented(err),
             AudioKeyError::Timeout => Error::aborted(err),
+            AudioKeyError::Backoff => Error::unavailable(err),
         }
     }
 }
@@ -40,7 +47,26 @@ component! {
     AudioKeyManager : AudioKeyManagerInner {
         sequence: SeqGenerator<u32> = SeqGenerator::new(0),
         pending: HashMap<u32, oneshot::Sender<Result<AudioKey, Error>>> = HashMap::new(),
+        // Riff: circuit breaker for refused keys, see `request`.
+        refusals: u32 = 0,
+        refused_until: Option<Instant> = None,
     }
+}
+
+// Riff: after Spotify refuses a key, further requests fail at once for this
+// long, doubling with each refusal in a row. Retrying straight away (the next
+// track, a preload, a cache retry) only keeps the account rate limited.
+// See https://github.com/librespot-org/librespot/issues/1649.
+const REFUSAL_BACKOFF_START: Duration = Duration::from_secs(10);
+const REFUSAL_BACKOFF_MAX: Duration = Duration::from_secs(5 * 60);
+
+fn refusal_backoff(refusals: u32) -> Duration {
+    let factor = 1u32
+        .checked_shl(refusals.saturating_sub(1))
+        .unwrap_or(u32::MAX);
+    REFUSAL_BACKOFF_START
+        .checked_mul(factor)
+        .map_or(REFUSAL_BACKOFF_MAX, |d| d.min(REFUSAL_BACKOFF_MAX))
 }
 
 impl AudioKeyManager {
@@ -53,6 +79,10 @@ impl AudioKeyManager {
 
         match cmd {
             PacketType::AesKey => {
+                self.lock(|inner| {
+                    inner.refusals = 0;
+                    inner.refused_until = None;
+                });
                 let mut key = [0u8; 16];
                 key.copy_from_slice(data.as_ref());
                 sender
@@ -65,6 +95,13 @@ impl AudioKeyManager {
                     data.as_ref()[0],
                     data.as_ref()[1]
                 );
+                let wait = self.lock(|inner| {
+                    inner.refusals += 1;
+                    let wait = refusal_backoff(inner.refusals);
+                    inner.refused_until = Some(Instant::now() + wait);
+                    wait
+                });
+                warn!("Not requesting audio keys for {}s", wait.as_secs());
                 sender
                     .send(Err(AudioKeyError::AesKey.into()))
                     .map_err(|_| AudioKeyError::Channel)?
@@ -79,6 +116,12 @@ impl AudioKeyManager {
     }
 
     pub async fn request(&self, track: SpotifyId, file: FileId) -> Result<AudioKey, Error> {
+        let holding = self.lock(|inner| inner.refused_until.is_some_and(|t| Instant::now() < t));
+        if holding {
+            debug!("Audio key request for {track:?} skipped: keys refused recently");
+            return Err(AudioKeyError::Backoff.into());
+        }
+
         let (tx, rx) = oneshot::channel();
 
         let seq = self.lock(move |inner| {
@@ -106,5 +149,19 @@ impl AudioKeyManager {
         data.write_u16::<BigEndian>(0x0000)?;
 
         self.session().send_packet(PacketType::RequestKey, data)
+    }
+}
+
+#[cfg(test)]
+mod riff_tests {
+    use super::*;
+
+    #[test]
+    fn refusal_backoff_doubles_up_to_the_cap() {
+        assert_eq!(refusal_backoff(1), Duration::from_secs(10));
+        assert_eq!(refusal_backoff(2), Duration::from_secs(20));
+        assert_eq!(refusal_backoff(5), Duration::from_secs(160));
+        assert_eq!(refusal_backoff(6), REFUSAL_BACKOFF_MAX);
+        assert_eq!(refusal_backoff(40), REFUSAL_BACKOFF_MAX);
     }
 }
