@@ -12,7 +12,7 @@ import kotlinx.coroutines.cancel
 enum class Tab { Home, Search, Library }
 
 /** Library chips. */
-enum class LibrarySection { Albums, Playlists, LikedSongs, Artists }
+enum class LibrarySection { Playlists, Albums, LikedSongs, Artists }
 
 /** Now Playing tabs. */
 enum class NowPlayingTab { Player, Queue, Lyrics }
@@ -67,7 +67,7 @@ class Navigator {
         Tab.Library to mutableStateListOf(NavEntry(Route.Library)),
     )
 
-    var librarySection by mutableStateOf(LibrarySection.Albums)
+    var librarySection by mutableStateOf(LibrarySection.Playlists)
     var nowPlayingOpen by mutableStateOf(false)
     var nowPlayingTab by mutableStateOf(NowPlayingTab.Player)
 
