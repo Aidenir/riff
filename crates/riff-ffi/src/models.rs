@@ -1,6 +1,6 @@
 //! Flat, FFI-friendly copies of the riff-api models.
 //!
-//! Swift only ever sees these records. Ids stay strings so the Swift side can
+//! The apps only ever see these records. Ids stay strings so the app can
 //! hand them back to the core unchanged.
 
 use riff_api::models::{
@@ -426,7 +426,7 @@ pub struct PlaybackSnapshot {
     pub volume: f64,
     pub source: Option<PlaySource>,
     pub has_next: bool,
-    /// Spotify Connect device playing, `None` when playing on this Mac.
+    /// Spotify Connect device playing, `None` when playing on this device.
     pub device_id: Option<String>,
     pub skip_explicit: bool,
     pub explicit_filter_locked: bool,
@@ -478,8 +478,9 @@ pub enum CoreEvent {
 
 #[derive(uniffi::Error, thiserror::Error, Debug)]
 pub enum CoreError {
-    #[error("{message}")]
-    Failed { message: String },
+    // Not `message`: Kotlin exceptions already have a property of that name.
+    #[error("{reason}")]
+    Failed { reason: String },
     #[error("not logged in")]
     NotLoggedIn,
 }
@@ -487,7 +488,7 @@ pub enum CoreError {
 impl From<riff_api::DomainError> for CoreError {
     fn from(e: riff_api::DomainError) -> Self {
         CoreError::Failed {
-            message: e.to_string(),
+            reason: e.to_string(),
         }
     }
 }

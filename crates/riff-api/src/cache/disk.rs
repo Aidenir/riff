@@ -49,9 +49,22 @@ fn user_cache_dir() -> PathBuf {
     glib::user_cache_dir()
 }
 
+#[cfg(not(feature = "gtk"))]
+static CACHE_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Set the cache directory before the first cache is built. Clients without
+/// a usable `HOME` (Android) pass the app's cache folder here.
+#[cfg(not(feature = "gtk"))]
+pub fn set_cache_root(dir: PathBuf) {
+    let _ = CACHE_ROOT.set(dir);
+}
+
 /// `~/Library/Caches` on macOS, falling back to the XDG location elsewhere.
 #[cfg(not(feature = "gtk"))]
 fn user_cache_dir() -> PathBuf {
+    if let Some(dir) = CACHE_ROOT.get() {
+        return dir.clone();
+    }
     if let Some(dir) = std::env::var_os("RIFF_CACHE_DIR") {
         return PathBuf::from(dir);
     }

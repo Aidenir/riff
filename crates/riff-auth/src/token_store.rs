@@ -2,6 +2,7 @@ use anyhow::Result;
 #[cfg(feature = "secret-service")]
 use oo7::Keyring;
 use std::sync::{Arc, RwLock};
+#[cfg(any(feature = "secret-service", debug_assertions))]
 use std::time::Duration;
 
 use crate::credentials::Credentials;
@@ -181,7 +182,7 @@ impl TokenStore {
     }
 
     /// Keychain account name, so the user and session credentials stay apart.
-    #[cfg(all(not(feature = "secret-service"), target_os = "macos"))]
+    #[cfg(not(feature = "secret-service"))]
     fn keychain_account(&self) -> String {
         self.0
             .attrs
@@ -216,20 +217,39 @@ impl TokenStore {
         Ok(())
     }
 
-    /// No credential backend on this platform: credentials only live for the
-    /// session.
+    /// No credential backend the core can reach: use the store the app
+    /// registered, or keep credentials for the session only.
     #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
     async fn retrieve(&self) -> Result<Credentials> {
-        Err(anyhow::anyhow!("No credential store available"))
+        let store = crate::secret_store::secret_store()
+            .ok_or_else(|| anyhow::anyhow!("No credential store available"))?;
+        let bytes = store
+            .get(&self.keychain_account())
+            .ok_or_else(|| anyhow::anyhow!("No stored credentials"))?;
+        Ok(serde_json::from_slice(&bytes)?)
     }
 
     #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
     async fn logout(&self) -> Result<()> {
+        if let Some(store) = crate::secret_store::secret_store() {
+            store.delete(&self.keychain_account());
+        }
         Ok(())
     }
 
     #[cfg(all(not(feature = "secret-service"), not(target_os = "macos")))]
-    async fn save(&self, _creds: &Credentials) -> Result<()> {
+    async fn save(&self, creds: &Credentials) -> Result<()> {
+        let Some(store) = crate::secret_store::secret_store() else {
+            return Ok(());
+        };
+        info!(
+            "Saving credentials to the app's secret store ({})",
+            self.0.label
+        );
+        let encoded = serde_json::to_vec(creds)?;
+        if !store.set(&self.keychain_account(), &encoded) {
+            return Err(anyhow::anyhow!("Secret store refused the credentials"));
+        }
         Ok(())
     }
 

@@ -19,6 +19,8 @@ pub(crate) mod service;
 #[cfg(debug_assertions)]
 pub(crate) mod dev;
 
+#[cfg(not(feature = "gtk"))]
+pub use cache::disk::set_cache_root;
 pub use cache::LoadedImage;
 pub use error::DomainError;
 pub use providers::spotify::domain::{check_user_profile, UserProfileCheck};

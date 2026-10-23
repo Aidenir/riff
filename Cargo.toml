@@ -1,6 +1,13 @@
 [workspace]
-members = ["crates/riff-auth", "crates/riff-api", "crates/riff-audio-engine", "crates/riff-config", "crates/riff-core", "crates/riff-player", "crates/riff-ffi", "generated/spotify-api"]
+members = ["crates/riff-auth", "crates/riff-api", "crates/riff-audio-engine", "crates/riff-config", "crates/riff-core", "crates/riff-player", "crates/riff-ffi", "crates/uniffi-bindgen", "generated/spotify-api"]
 resolver = "2"
+exclude = ["vendor/librespot-core"]
+
+# librespot-core 0.8.0 with one change: it identifies as Linux on Android
+# (vendor/librespot-core/src/config.rs). Remove once librespot can be told
+# which platform to present itself as.
+[patch.crates-io]
+librespot-core = { path = "vendor/librespot-core" }
 
 [package]
 name = "riff"

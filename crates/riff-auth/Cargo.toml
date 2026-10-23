@@ -14,7 +14,6 @@ secret-service = ["dep:oo7"]
 [dependencies]
 
 oauth2 = { version = "5.0", default-features = false, features = ["reqwest"] }
-reqwest = "0.12"
 url = "2.4.1"
 thiserror = "2.0.20"
 log = "0.4.17"
@@ -29,6 +28,13 @@ features = ["derive"]
 [dependencies.tokio]
 version = "1"
 features = ["rt", "macros", "sync", "time", "io-util", "net"]
+
+# rustls on Android, which has no system OpenSSL (see riff-api).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+reqwest = "0.12"
+
+[target.'cfg(target_os = "android")'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "rustls-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3"

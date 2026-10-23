@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The light tile the macOS icon sits on (scripts/render-svg.swift). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:endColor="#FFE0E0E0"
+        android:startColor="#FFFCFCFC" />
+</shape>

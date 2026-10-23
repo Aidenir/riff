@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+uniffi/
+app/src/main/jniLibs/
+app/src/main/res/values-*/strings.xml
+!app/src/main/res/values-night/
+*.keystore
+!debug.keystore

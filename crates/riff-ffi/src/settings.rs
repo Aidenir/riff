@@ -1,18 +1,16 @@
-//! User settings for the macOS client.
+//! User settings for the native clients.
 //!
 //! The GTK app keeps these in GSettings (`dev.diegovsky.Riff.gschema.xml`).
-//! Here they live in one JSON file under Application Support, with the same
+//! Here they live in one JSON file in the app's support folder, with the same
 //! keys and defaults, so the core can read them from any thread.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, NormalisationType};
 use riff_api::RepeatMode;
 use riff_player::{AudioBackend, SpotifyPlayerSettings, VolumeCurveType};
 use serde::{Deserialize, Serialize};
-
-pub const APP_ID: &str = "com.aidenir.Riff";
 
 #[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ThemePreference {
@@ -269,28 +267,6 @@ impl AppSettings {
     }
 }
 
-pub fn support_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("RIFF_SUPPORT_DIR") {
-        return PathBuf::from(dir);
-    }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_default();
-    home.join("Library")
-        .join("Application Support")
-        .join(APP_ID)
-}
-
-pub fn cache_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("RIFF_CACHE_DIR") {
-        return PathBuf::from(dir);
-    }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_default();
-    home.join("Library").join("Caches")
-}
-
 /// Settings loaded once and written back on every change.
 pub struct SettingsStore {
     path: PathBuf,
@@ -298,8 +274,8 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    pub fn open() -> Self {
-        let path = support_dir().join("settings.json");
+    pub fn open(support_dir: &Path) -> Self {
+        let path = support_dir.join("settings.json");
         let current = std::fs::read(&path)
             .ok()
             .and_then(|bytes| {

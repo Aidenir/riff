@@ -60,7 +60,7 @@ cargo build -p riff-ffi ${CARGO_FLAGS[@]+"${CARGO_FLAGS[@]}"}
 echo "=== Swift bindings ==="
 BINDINGS_TMP="$(mktemp -d)"
 trap 'rm -rf "$BINDINGS_TMP"' EXIT
-cargo run -q -p riff-ffi ${CARGO_FLAGS[@]+"${CARGO_FLAGS[@]}"} --bin uniffi-bindgen -- generate \
+cargo run -q -p uniffi-bindgen -- generate \
     --metadata-no-deps \
     --library "$RUST_LIB_DIR/libriff_ffi.dylib" \
     --language swift \

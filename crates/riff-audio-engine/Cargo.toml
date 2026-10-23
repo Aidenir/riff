@@ -8,7 +8,13 @@ description = "Riff's audio engine: the DSP pipeline between the decoder and the
 [dependencies]
 log = "0.4.17"
 
-[dependencies.librespot-playback]
+# rustls on Android, which has no system OpenSSL (see riff-api).
+[target.'cfg(not(target_os = "android"))'.dependencies.librespot-playback]
 version = "0.8.0"
 default-features = false
 features = ["native-tls"]
+
+[target.'cfg(target_os = "android")'.dependencies.librespot-playback]
+version = "0.8.0"
+default-features = false
+features = ["rustls-tls-webpki-roots"]

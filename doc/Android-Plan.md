@@ -23,6 +23,21 @@ Plan for a native Android version of Riff with feature parity to the macOS app, 
 | Translations | `po/*.po` converted to `values-<lang>/strings.xml` by a script, skipping `en.po`. |
 | CI | New workflow `riff-android.yml`: Rust tests, Kotlin unit tests, a release APK, upload, and attach to releases on `v*` tags. |
 
+## Changes from the plan
+
+Found while building, decided without stopping:
+
+- **librespot identifies as Linux on Android.** librespot picks Spotify's Android client ID and an Android client token from a compile-time `OS` constant. Riff logs in through the desktop OAuth client, so every track load failed (`INVALID_CREDENTIALS`, then `BAD_REQUEST` from login5) and Riff reported it as a DRM block. `vendor/librespot-core` is librespot-core 0.8.0 with `OS` set to `"linux"` on Android, used through `[patch.crates-io]`. Linux and macOS are unchanged.
+- **TLS by target, not by feature.** Following lesson 3, `reqwest` and librespot use rustls with webpki roots through `cfg(target_os = "android")` dependency tables instead of a `rustls` feature. `scripts/generate-spotify-api.sh` patches the generated crate the same way. No OpenSSL ends up in the Android build.
+- **`uniffi-bindgen` is its own crate** (`crates/uniffi-bindgen`). Bindings are generated on the build host, which is Linux in CI, where `riff-ffi` compiles to nothing.
+- **`CoreError::Failed` carries `reason`, not `message`.** Kotlin exceptions already have a `message` property and the generated code did not compile.
+- **The script drives the build, not Gradle.** `scripts/build-android.sh` runs cargo-ndk, the bindings and the translations, then Gradle. The Rust core is always built in release mode; unoptimised librespot decodes too slowly.
+- **compileSdk and targetSdk 37.** Compose BOM 2026.09 requires compiling against 37.
+- **Own back stacks instead of navigation-compose.** A small `Navigator` keeps one stack per tab, with a page model per entry, so switching tabs keeps loaded pages and scroll positions.
+- **Debug builds are `com.aidenir.riff.debug`**, so a debug and a release build can be installed side by side. The smoke test command is `adb shell am start -n com.aidenir.riff.debug/com.aidenir.riff.MainActivity -e smoke 1`, wrapped by `./scripts/test-android.sh --smoke`.
+- **A floating dock instead of a plain navigation bar.** Asked for during review: the mini player and the tabs share one rounded, art-tinted card, and the selected tab grows into a gradient pill. Startup shows an animated intro after the system splash, and loading uses bouncing equalizer bars and shimmering artwork placeholders.
+- **The release key lives in `~/.riff/`** (`riff-release.jks` and `release-signing.env`) on Viktor's Mac. It still needs a backup and the four GitHub secrets (`RIFF_KEYSTORE_BASE64`, `RIFF_KEYSTORE_PASSWORD`, `RIFF_KEY_ALIAS`, `RIFF_KEY_PASSWORD`).
+
 ## What the macOS port taught us
 
 Each of these shapes a decision above or a step below.

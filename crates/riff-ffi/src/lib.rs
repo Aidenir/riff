@@ -1,11 +1,11 @@
-//! Swift-facing core of the macOS client.
+//! Core of the native macOS and Android clients.
 //!
 //! [`RiffCore`] owns what `App::new` wires up in the GTK app: the token
 //! stores, the api service, the librespot player and a playback controller.
-//! Swift talks to it through UniFFI: async methods for data, plain methods
-//! for playback commands, and a [`Listener`] for events coming back.
+//! Swift and Kotlin talk to it through UniFFI: async methods for data, plain
+//! methods for playback commands, and a [`Listener`] for events coming back.
 
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "android"))]
 
 #[macro_use]
 extern crate log;
@@ -25,6 +25,7 @@ use url::Url;
 
 mod connect;
 mod models;
+mod platform;
 mod playback;
 mod settings;
 
@@ -51,6 +52,46 @@ pub trait Listener: Send + Sync {
     fn on_event(&self, event: CoreEvent);
 }
 
+/// Folders the core keeps its files in, chosen by the app.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct CoreConfig {
+    /// Settings live here.
+    pub support_dir: String,
+    /// Api, image and audio caches live under `<cache_dir>/riff`.
+    pub cache_dir: String,
+}
+
+/// The folders the macOS client has always used.
+#[uniffi::export]
+pub fn default_core_config() -> CoreConfig {
+    platform::default_config()
+}
+
+/// Credential storage implemented by the app, for platforms where the core
+/// cannot reach a keychain itself (the Android Keystore).
+#[uniffi::export(with_foreign)]
+pub trait SecretStore: Send + Sync {
+    fn get(&self, account: String) -> Option<Vec<u8>>;
+    fn set(&self, account: String, secret: Vec<u8>) -> bool;
+    fn delete(&self, account: String);
+}
+
+struct ForeignSecrets(Arc<dyn SecretStore>);
+
+impl riff_auth::SecretStore for ForeignSecrets {
+    fn get(&self, account: &str) -> Option<Vec<u8>> {
+        self.0.get(account.to_string())
+    }
+
+    fn set(&self, account: &str, secret: &[u8]) -> bool {
+        self.0.set(account.to_string(), secret.to_vec())
+    }
+
+    fn delete(&self, account: &str) {
+        self.0.delete(account.to_string())
+    }
+}
+
 /// How eagerly a request should be served, mapped onto the api scheduler.
 #[derive(uniffi::Enum, Clone, Copy, Debug)]
 pub enum Priority {
@@ -74,15 +115,16 @@ fn visible() -> Load {
     load(Priority::Visible)
 }
 
-/// Forwards librespot feedback into the playback controller and Swift.
-struct MacPlayerDelegate {
+/// Forwards librespot feedback into the playback controller and the app.
+struct CorePlayerDelegate {
     listener: Arc<dyn Listener>,
     playback: Mutex<Option<PlaybackHandle>>,
     settings: Arc<SettingsStore>,
     user: Arc<Mutex<Option<String>>>,
+    librespot_cache: PathBuf,
 }
 
-impl MacPlayerDelegate {
+impl CorePlayerDelegate {
     fn send(&self, msg: Msg) {
         if let Some(playback) = self.playback.lock().unwrap().as_ref() {
             playback.send(msg);
@@ -90,7 +132,7 @@ impl MacPlayerDelegate {
     }
 }
 
-impl PlayerDelegate for MacPlayerDelegate {
+impl PlayerDelegate for CorePlayerDelegate {
     fn end_of_track_reached(&self) {
         self.send(Msg::TrackEnded);
     }
@@ -176,16 +218,12 @@ impl PlayerDelegate for MacPlayerDelegate {
     }
 
     fn librespot_cache_root(&self) -> PathBuf {
-        librespot_cache_root()
+        self.librespot_cache.clone()
     }
 
     fn audio_cache_size_limit_bytes(&self) -> u64 {
         self.settings.get().audio_cache_size_mb as u64 * 1024 * 1024
     }
-}
-
-fn librespot_cache_root() -> PathBuf {
-    settings::cache_dir().join("riff").join("librespot")
 }
 
 #[derive(uniffi::Object)]
@@ -198,6 +236,7 @@ pub struct RiffCore {
     listener: Arc<dyn Listener>,
     tracks: Mutex<HashMap<String, Track>>,
     user: Arc<Mutex<Option<String>>>,
+    librespot_cache: PathBuf,
 }
 
 impl RiffCore {
@@ -233,7 +272,7 @@ impl RiffCore {
             .spawn(future)
             .await
             .map_err(|e| CoreError::Failed {
-                message: e.to_string(),
+                reason: e.to_string(),
             })?
     }
 
@@ -293,19 +332,28 @@ fn parse_key(key: &str) -> Option<EntryKey> {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl RiffCore {
+    /// `secrets` stores credentials where the core has no keychain of its
+    /// own (Android); macOS passes `None` and uses the Keychain.
     #[uniffi::constructor]
-    pub fn new(listener: Arc<dyn Listener>) -> Arc<Self> {
-        let _ = env_logger::Builder::from_env(
-            env_logger::Env::default().default_filter_or("riff=info,riff_ffi=info,librespot=warn"),
-        )
-        .try_init();
+    pub fn new(
+        listener: Arc<dyn Listener>,
+        config: CoreConfig,
+        secrets: Option<Arc<dyn SecretStore>>,
+    ) -> Arc<Self> {
+        platform::init_logging();
+        let cache_dir = PathBuf::from(&config.cache_dir);
+        riff_api::set_cache_root(cache_dir.clone());
+        if let Some(secrets) = secrets {
+            riff_auth::set_secret_store(Arc::new(ForeignSecrets(secrets)));
+        }
+        let librespot_cache = cache_dir.join("riff").join("librespot");
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_name("riff-core")
             .build()
             .expect("tokio runtime");
-        let settings = Arc::new(SettingsStore::open());
+        let settings = Arc::new(SettingsStore::open(&PathBuf::from(&config.support_dir)));
         let current = settings.get();
 
         let token_store = TokenStore::new();
@@ -321,11 +369,12 @@ impl RiffCore {
         };
 
         let user = Arc::new(Mutex::new(None));
-        let delegate = Arc::new(MacPlayerDelegate {
+        let delegate = Arc::new(CorePlayerDelegate {
             listener: Arc::clone(&listener),
             playback: Mutex::new(None),
             settings: Arc::clone(&settings),
             user: Arc::clone(&user),
+            librespot_cache: librespot_cache.clone(),
         });
         let player = riff_player::start_player_service(
             current.player_settings(),
@@ -358,6 +407,7 @@ impl RiffCore {
             listener,
             tracks: Mutex::new(HashMap::new()),
             user,
+            librespot_cache,
         })
     }
 
@@ -397,7 +447,7 @@ impl RiffCore {
 
     /// Save settings edited in the UI. Values the core keeps up to date
     /// itself (volume, shuffle, repeat, DRM marker) are kept from the store,
-    /// so a stale copy from Swift cannot roll them back.
+    /// so a stale copy from the app cannot roll them back.
     pub fn update_settings(&self, settings: AppSettings) {
         let current = self.settings.get();
         let settings = AppSettings {
@@ -422,10 +472,11 @@ impl RiffCore {
 
     pub async fn clear_cache(&self) {
         let api = Arc::clone(&self.api);
+        let librespot_cache = self.librespot_cache.clone();
         let _ = self
             .spawn(async move {
                 api.clear_user_cache().await;
-                riff_player::clear_audio_cache(&librespot_cache_root());
+                riff_player::clear_audio_cache(&librespot_cache);
                 Ok(())
             })
             .await;
@@ -637,7 +688,7 @@ impl RiffCore {
         .await
     }
 
-    /// Move playback to a Connect device, or back to this Mac with `None`.
+    /// Move playback to a Connect device, or back to this device with `None`.
     pub fn switch_device(&self, device_id: Option<String>) {
         self.playback.send(Msg::SwitchDevice(device_id));
     }
@@ -924,7 +975,7 @@ impl RiffCore {
             self.lookup(std::slice::from_ref(&track_id))
                 .pop()
                 .ok_or(CoreError::Failed {
-                    message: "unknown track".into(),
+                    reason: "unknown track".into(),
                 })?;
         let api = Arc::clone(&self.api);
         self.spawn(async move { Ok(LyricsInfo::from(&api.get_lyrics(&track, visible()).await?)) })
@@ -1046,7 +1097,7 @@ impl RiffCore {
         Ok(results.playlists)
     }
 
-    /// Artwork bytes (JPEG or PNG) for Swift to decode, cached in memory and
+    /// Artwork bytes (JPEG or PNG) for the app to decode, cached in memory and
     /// on disk by the api layer.
     pub async fn image(&self, url: String, size: u32, priority: Priority) -> Option<Vec<u8>> {
         let api = Arc::clone(&self.api);
@@ -1170,7 +1221,7 @@ impl RiffCore {
         Ok(())
     }
 
-    /// Upload a JPEG cover that Swift already cropped to a square.
+    /// Upload a JPEG cover that the app already cropped to a square.
     pub async fn upload_playlist_cover(&self, id: String, jpeg: Vec<u8>) -> Result<(), CoreError> {
         let api = Arc::clone(&self.api);
         self.spawn(async move {

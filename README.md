@@ -5,7 +5,7 @@
 <h1 align="center">Riff</h1>
 
 <p align="center">
-    Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free, on Linux and on macOS.
+    Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free, on Linux, macOS and Android.
 </p>
 
 <p align="center">
@@ -18,16 +18,17 @@
 > Requires a Spotify Premium account. Some accounts may not work due to Spotify's new PlayPlay DRM, which is proprietary and cannot be implemented externally.
 
 > [!IMPORTANT]
-> This repository is a fork of [Diegovsky/riff](https://github.com/Diegovsky/riff) that adds a native macOS app next to the GTK app. Upstream does not accept AI-generated contributions, following [Flathub's Generative AI Policy](https://docs.flathub.org/docs/for-app-authors/requirements/#generative-ai-policy) and [GNOME Circle's AI Policy](https://gitlab.gnome.org/Teams/Releng/AppOrganization/-/blob/main/AppCriteria.md#circle-app-criteria). The macOS app and the changes that support it were written with AI assistance, so they stay in this fork.
+> This repository is a fork of [Diegovsky/riff](https://github.com/Diegovsky/riff) that adds native macOS and Android apps next to the GTK app. Upstream does not accept AI-generated contributions, following [Flathub's Generative AI Policy](https://docs.flathub.org/docs/for-app-authors/requirements/#generative-ai-policy) and [GNOME Circle's AI Policy](https://gitlab.gnome.org/Teams/Releng/AppOrganization/-/blob/main/AppCriteria.md#circle-app-criteria). The macOS and Android apps and the changes that support them were written with AI assistance, so they stay in this fork.
 
-## Two apps, one core
+## Three apps, one core
 
-Riff ships as two native apps that share the same Rust core:
+Riff ships as three native apps that share the same Rust core:
 
 - **Linux**: a GTK4 and libadwaita app, available on Flathub.
 - **macOS**: a SwiftUI app for macOS 26 on Apple Silicon, with the sidebar, toolbar, menu bar and Settings window you expect on a Mac.
+- **Android**: a Jetpack Compose app for phones on Android 13 and later, with a floating player dock, a media notification and background playback.
 
-Both talk to Spotify through the same data layer, cache, login code, play queue, audio engine and librespot player. Only the interface and the desktop integration differ.
+All three talk to Spotify through the same data layer, cache, login code, play queue, audio engine and librespot player. Only the interface and the desktop integration differ.
 
 ### Linux
 
@@ -44,7 +45,7 @@ Both talk to Spotify through the same data layer, cache, login code, play queue,
 
 ## Features
 
-Both apps:
+All apps:
 
 - Play, pause, skip, seek, shuffle and repeat, with gapless playback
 - A home page with recent listening, top artists, playlists for the moment and season, and the charts
@@ -70,6 +71,14 @@ On macOS:
 - Menu bar commands with Mac keyboard shortcuts, a Settings window, and a queue inspector
 - Offers to open Spotify links found on the clipboard
 - Translations from the same gettext catalogs as the Linux app
+
+On Android:
+
+- Background playback with the media notification, lock screen, Bluetooth and headset controls
+- Pauses for calls and when headphones are unplugged, lets navigation prompts duck the music
+- Opens `open.spotify.com` links and accepts links shared from other apps
+- Long press to select several tracks, swipe queue entries away, drag to reorder
+- Credentials encrypted with a key in the Android Keystore
 
 ## Installing
 
@@ -103,6 +112,12 @@ Download `Riff-<version>.dmg` from this fork's releases (built by the `riff-maco
 
 The app is not notarized yet, so the first launch needs right-click on Riff, then Open. macOS asks for your login password once so Riff can read its login from the Keychain; choose Always Allow.
 
+### Android
+
+Download `Riff-<version>.apk` from this fork's releases (built by the `riff-android` workflow) on the phone and open it. Android asks once to allow installing apps from your browser or file manager.
+
+Some phone makers stop background apps aggressively. If music stops with the screen off, set Riff's battery usage to "Unrestricted" in the app info.
+
 ## Building from source
 
 ### Linux
@@ -128,22 +143,38 @@ open build/macos/Riff.app                # run Riff
 
 `./scripts/build-macos.sh debug --run` builds a debug app, with a Debug menu for feature flags, and runs it with logging in the terminal.
 
+### Android
+
+Requires rustup with the `aarch64-linux-android` and `x86_64-linux-android` targets, `cargo install cargo-ndk`, the Android SDK with platform 37 and an NDK, Java 17, and Java for the API generator.
+
+```sh
+./scripts/build-android.sh debug --install   # build and install a debug APK over adb
+./scripts/test-android.sh                    # Rust and Kotlin tests
+./scripts/test-android.sh --smoke            # plus the smoke test on the connected phone
+./scripts/build-android.sh release           # signed release APK (needs RIFF_KEYSTORE and friends)
+```
+
+Debug builds install as `com.aidenir.riff.debug` and have a Debug section in Settings for feature flags.
+
 ## Project layout
 
 | Path | What it is |
 | --- | --- |
 | `crates/riff-api` | Spotify data layer: provider-neutral models, HTTP, caching and request scheduling |
-| `crates/riff-auth` | OAuth2 login and credential storage (Secret Service on Linux, Keychain on macOS) |
+| `crates/riff-auth` | OAuth2 login and credential storage (Secret Service on Linux, Keychain on macOS, an app-provided store on Android) |
 | `crates/riff-core` | Navigation history and the play queue, free of UI code |
 | `crates/riff-player` | librespot session and playback, reporting back through a delegate |
 | `crates/riff-audio-engine` | The audio processing chain: equalizer, pan, pitch, mono |
 | `crates/riff-config` | Constants, GSettings access and feature flags |
-| `crates/riff-ffi` | The macOS core: Swift bindings (UniFFI), playback controller, Spotify Connect, settings |
+| `crates/riff-ffi` | The macOS and Android core: Swift and Kotlin bindings (UniFFI), playback controller, Spotify Connect, settings |
+| `crates/uniffi-bindgen` | Generates those bindings on the build host |
+| `vendor/librespot-core` | librespot-core with one Android change (see `vendor/README.md`) |
 | `src/` | The GTK app |
 | `macos/` | The SwiftUI app |
+| `android/` | The Jetpack Compose app |
 | `po/` | Translations, used by both apps |
 | `flatpak/` | Flatpak manifests |
-| `doc/` | Developer documentation, including the [macOS plan](doc/macOS-Plan.md) |
+| `doc/` | Developer documentation, including the [macOS plan](doc/macOS-Plan.md) and the [Android plan](doc/Android-Plan.md) |
 
 ## Contributing
 

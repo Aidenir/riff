@@ -1,8 +1,8 @@
-//! Playback controller for the macOS client.
+//! Playback controller for the native clients.
 //!
 //! Mirrors the GTK `PlaybackState` reducer (`src/app/state/playback_state.rs`)
 //! on top of the shared [`PlayQueue`]: it decides what plays next, drives the
-//! librespot player through [`Command`]s and publishes snapshots to Swift.
+//! librespot player through [`Command`]s and publishes snapshots to the app.
 //! Everything runs on one task, fed by [`Msg`]s, so no locking is needed
 //! around the queue itself.
 
@@ -706,7 +706,7 @@ pub fn start(
     handle
 }
 
-/// Batch size used when the core preloads a context for Swift.
+/// Batch size used when the core preloads a context for the app.
 pub const PAGE_SIZE: usize = CONTEXT_PAGE_SIZE;
 
 #[cfg(test)]

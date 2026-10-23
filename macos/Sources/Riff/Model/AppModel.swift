@@ -68,7 +68,7 @@ final class AppModel {
     init() {
         let bridge = EventBridge()
         self.bridge = bridge
-        core = RiffCore(listener: bridge)
+        core = RiffCore(listener: bridge, config: defaultCoreConfig(), secrets: nil)
         playback = core.playback()
         queue = core.queue()
         settings = core.settings()

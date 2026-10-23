@@ -1,0 +1,10 @@
+[package]
+name = "uniffi-bindgen"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Generates the Swift and Kotlin bindings for riff-ffi on the build host."
+
+[dependencies]
+uniffi = { version = "0.32", features = ["cli"] }
