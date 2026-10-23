@@ -35,7 +35,8 @@ import com.aidenir.riff.ui.NavEntry
 import com.aidenir.riff.ui.Route
 import com.aidenir.riff.ui.components.ArtworkImage
 import com.aidenir.riff.ui.components.CardShelf
-import com.aidenir.riff.ui.components.EqualizerLoader
+import com.aidenir.riff.ui.components.RiffLoader
+import com.aidenir.riff.ui.components.rememberLoaderVisible
 import com.aidenir.riff.ui.components.PageScaffold
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -147,6 +148,11 @@ fun HomeScreen(app: AppState, entry: NavEntry) {
             onRefresh = { model.load(momentMood, seasonMood, user?.country) },
             modifier = Modifier.fillMaxSize(),
         ) {
+            val empty = model.recent.isEmpty() && model.topArtists.isEmpty() && model.charts.isEmpty()
+            if (rememberLoaderVisible(model.loading && empty)) {
+                RiffLoader(Modifier.fillMaxSize())
+                return@PullToRefreshBox
+            }
             LazyColumn(Modifier.fillMaxSize()) {
                 item {
                     Text(
@@ -161,9 +167,6 @@ fun HomeScreen(app: AppState, entry: NavEntry) {
                 item { CardShelf(app, moodTitle(momentMood), model.moment) }
                 item { CardShelf(app, moodTitle(seasonMood), model.season) }
                 item { CardShelf(app, chartsTitle(user?.country), model.charts) }
-                if (model.loading && model.recent.isEmpty() && model.charts.isEmpty()) {
-                    item { EqualizerLoader(Modifier.padding(32.dp)) }
-                }
             }
         }
     }

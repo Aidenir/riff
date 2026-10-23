@@ -33,7 +33,7 @@ import com.aidenir.riff.R
 fun LoadState(error: String?, modifier: Modifier = Modifier, retry: () -> Unit) {
     Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         if (error == null) {
-            EqualizerLoader()
+            RiffLoader()
         } else {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Default.ErrorOutline, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)

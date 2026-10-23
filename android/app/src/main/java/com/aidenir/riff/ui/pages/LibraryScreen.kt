@@ -83,6 +83,7 @@ import com.aidenir.riff.ui.components.SelectionBar
 import com.aidenir.riff.ui.components.TrackSelection
 import com.aidenir.riff.ui.components.cardCreator
 import com.aidenir.riff.ui.components.trackRows
+import com.aidenir.riff.ui.components.rememberLoaderVisible
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -351,8 +352,9 @@ private fun CardGridPage(
     retry: () -> Unit,
     loadMore: () -> Unit,
 ) {
+    val holding = rememberLoaderVisible(!loaded)
     when {
-        !loaded || (error != null && items.isEmpty()) -> LoadState(error, retry = retry)
+        holding || (error != null && items.isEmpty()) -> LoadState(error, retry = retry)
         items.isEmpty() -> EmptyState(Icons.Default.Album, stringResource(R.string.nothing_here_yet))
         else -> LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(10.dp)) {
             itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
@@ -368,7 +370,7 @@ private fun CardGridPage(
 fun PlaylistsList(app: AppState, folderId: String?, sort: String, filter: String) {
     val library = app.playlistLibrary
     LaunchedEffect(Unit) { library.loadIfNeeded() }
-    if (!library.loaded) {
+    if (rememberLoaderVisible(!library.loaded) || !library.loaded) {
         LoadState(library.error, retry = library::reload)
         return
     }
@@ -425,7 +427,7 @@ fun PlaylistsList(app: AppState, folderId: String?, sort: String, filter: String
 @Composable
 private fun LikedSongs(app: AppState, model: LibraryModel, tracks: List<TrackInfo>) {
     val paged = model.tracks
-    if (!paged.loaded || (paged.error != null && paged.items.isEmpty())) {
+    if (rememberLoaderVisible(!paged.loaded) || (paged.error != null && paged.items.isEmpty())) {
         LoadState(paged.error, retry = paged::reload)
         return
     }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -63,6 +64,7 @@ import com.aidenir.riff.ui.components.SectionHeader
 import com.aidenir.riff.ui.components.SelectionBar
 import com.aidenir.riff.ui.components.TrackSelection
 import com.aidenir.riff.ui.components.trackRows
+import com.aidenir.riff.ui.components.rememberLoaderVisible
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -169,7 +171,7 @@ fun AlbumScreen(app: AppState, entry: NavEntry, id: String) {
         topBar = if (model.selection.active) ({ SelectionBar(app, model.selection, tracks.items) }) else null,
         actions = { if (album != null) MoreButton(app, CardItem.Album(album)) },
     ) {
-        if (album == null) {
+        if (rememberLoaderVisible(album == null && model.error == null) || album == null) {
             LoadState(model.error) { model.load(force = true) }
             return@PageScaffold
         }
@@ -275,7 +277,7 @@ fun PlaylistScreen(app: AppState, entry: NavEntry, id: String) {
         topBar = if (model.selection.active) ({ SelectionBar(app, model.selection, tracks.items, id) }) else null,
         actions = { if (playlist != null) MoreButton(app, CardItem.Playlist(playlist)) },
     ) {
-        if (playlist == null) {
+        if (rememberLoaderVisible(playlist == null && model.error == null) || playlist == null) {
             LoadState(model.error) { model.load(version, force = true) }
             return@PageScaffold
         }
@@ -325,7 +327,7 @@ fun PlaylistScreen(app: AppState, entry: NavEntry, id: String) {
                 }
             }
             if (!tracks.loaded) {
-                item { LoadState(tracks.error, Modifier.size(200.dp), retry = tracks::reload) }
+                item { LoadState(tracks.error, Modifier.height(320.dp), retry = tracks::reload) }
             }
             trackRows(
                 app,
@@ -405,7 +407,7 @@ fun ArtistScreen(app: AppState, entry: NavEntry, id: String) {
         topBar = if (model.selection.active) ({ SelectionBar(app, model.selection, model.topTracks) }) else null,
         actions = { if (artist != null) MoreButton(app, CardItem.Artist(artist)) },
     ) {
-        if (artist == null) {
+        if (rememberLoaderVisible(artist == null && model.error == null) || artist == null) {
             LoadState(model.error) { model.load(force = true) }
             return@PageScaffold
         }
@@ -507,7 +509,7 @@ fun UserScreen(app: AppState, entry: NavEntry, id: String) {
     val user = model.item
     val me by app.user.collectAsState()
     PageScaffold(app, title = user?.displayName ?: "") {
-        if (user == null) {
+        if (rememberLoaderVisible(user == null && model.error == null) || user == null) {
             LoadState(model.error) { model.load(force = true) }
             return@PageScaffold
         }

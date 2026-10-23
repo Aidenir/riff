@@ -252,4 +252,11 @@
         <item quantity="one">%1$d track</item>
         <item quantity="other">%1$d tracks</item>
     </plurals>
+    <string-array name="loading_captions">
+        <item>Dropping the needle…</item>
+        <item>Tuning the strings…</item>
+        <item>Warming up the amps…</item>
+        <item>Digging through the crates…</item>
+        <item>Finding the beat…</item>
+    </string-array>
 </resources>
