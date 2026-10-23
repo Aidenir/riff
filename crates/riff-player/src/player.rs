@@ -76,9 +76,24 @@ impl fmt::Display for SpotifyError {
 
 // Consecutive load failures before we stop playback, halting a runaway churn
 // through the queue. If nothing has played since login, this run also signals
-// PlayPlay DRM. High enough that one removed album won't trip it.
-// See https://github.com/librespot-org/librespot/issues/1649.
-const CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD: u32 = 10;
+// PlayPlay DRM. Kept low: when Spotify refuses audio keys, every further track
+// asks for another key, and hammering the key endpoint keeps the account
+// rate limited. See https://github.com/librespot-org/librespot/issues/1649.
+const CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD: u32 = 3;
+// After such a stop, new loads are refused for a while so the key endpoint
+// can recover. The wait doubles with each stop until a track plays again.
+const LOAD_BACKOFF_START: Duration = Duration::from_secs(30);
+const LOAD_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
+
+/// How long to hold off loading after the `level`th stop in a row (from 1).
+fn load_backoff(level: u32) -> Duration {
+    let factor = 1u32
+        .checked_shl(level.saturating_sub(1))
+        .unwrap_or(u32::MAX);
+    LOAD_BACKOFF_START
+        .checked_mul(factor)
+        .map_or(LOAD_BACKOFF_MAX, |d| d.min(LOAD_BACKOFF_MAX))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioBackend {
@@ -306,6 +321,11 @@ pub struct SpotifyPlayer {
     // Consecutive load failures; see CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD.
     // Reset when a track plays and when the threshold fires.
     consecutive_load_failures: Arc<AtomicU32>,
+    // Stops in a row without a track playing in between; sets the backoff.
+    // Reset by the player event task when a track plays.
+    load_backoff_level: Arc<AtomicU32>,
+    // Loads are refused until then, see LOAD_BACKOFF_START.
+    loads_blocked_until: Option<Instant>,
     // Whether any track has played since login. If so, load failures are
     // individual unavailable tracks, not a DRM block. Reset on login/logout,
     // not on reconnect.
@@ -368,6 +388,8 @@ impl SpotifyPlayer {
             connection_lost: Arc::new(AtomicBool::new(false)),
             advance_after_reconnect: Arc::new(AtomicBool::new(false)),
             consecutive_load_failures: Arc::new(AtomicU32::new(0)),
+            load_backoff_level: Arc::new(AtomicU32::new(0)),
+            loads_blocked_until: None,
             has_played_since_login: Arc::new(AtomicBool::new(false)),
             current_user_id: None,
 
@@ -445,6 +467,16 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerLoad { track, resume } => {
+                if let Some(wait) = self.load_hold() {
+                    warn!(
+                        "Holding playback for {}s: Spotify refused recent tracks",
+                        wait.as_secs()
+                    );
+                    self.delegate
+                        .report_error(SpotifyError::PlaybackTemporarilyUnavailable);
+                    self.delegate.stop_playback();
+                    return Ok(());
+                }
                 debug!("Player: playing track {track}");
                 self.ensure_session_alive().await?;
                 self.current_track = Some(track.clone());
@@ -456,6 +488,9 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerPreload(track) => {
+                if self.load_hold().is_some() {
+                    return Ok(());
+                }
                 self.get_player_mut()?.preload(track);
                 Ok(())
             }
@@ -703,6 +738,8 @@ impl SpotifyPlayer {
         // Fresh login: reset the failure run so a previous account can't trip
         // a DRM block. has_played_since_login is seeded per-account below.
         self.consecutive_load_failures.store(0, Ordering::Relaxed);
+        self.load_backoff_level.store(0, Ordering::Relaxed);
+        self.loads_blocked_until = None;
 
         // Check if the account is premium before connecting to librespot.
         // librespot will crash the process for free accounts, so we must
@@ -842,9 +879,21 @@ impl SpotifyPlayer {
             .fetch_add(1, Ordering::Relaxed)
             + 1;
         if failures >= CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD {
-            warn!("{failures} tracks failed to load back-to-back; stopping playback");
-            // Nothing has ever played: signature of PlayPlay DRM.
-            if !self.has_played_since_login.load(Ordering::Relaxed) {
+            let level = self.load_backoff_level.fetch_add(1, Ordering::Relaxed) + 1;
+            let wait = load_backoff(level);
+            self.loads_blocked_until = Some(Instant::now() + wait);
+            warn!(
+                "{failures} tracks failed to load back-to-back; stopping playback for {}s",
+                wait.as_secs()
+            );
+            // Nothing has played on an account never seen playing: signature
+            // of PlayPlay DRM. An account that played before is more likely
+            // rate limited for now.
+            let verified = self
+                .current_user_id
+                .as_deref()
+                .is_some_and(|id| !id.is_empty() && self.delegate.drm_verified_user() == id);
+            if !self.has_played_since_login.load(Ordering::Relaxed) && !verified {
                 self.delegate.report_error(SpotifyError::PlaybackDrmBlocked);
             } else {
                 self.delegate
@@ -860,6 +909,14 @@ impl SpotifyPlayer {
         let _ = self
             .command_sender
             .unbounded_send(Command::RecheckExplicitFilter);
+    }
+
+    /// Time left before loads are allowed again after repeated failures.
+    fn load_hold(&self) -> Option<Duration> {
+        let until = self.loads_blocked_until?;
+        until
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
     }
 
     fn session_needs_rebuild(&self) -> bool {
@@ -1001,6 +1058,7 @@ impl SpotifyPlayer {
             Arc::clone(&self.connection_lost),
             Arc::clone(&self.advance_after_reconnect),
             Arc::clone(&self.consecutive_load_failures),
+            Arc::clone(&self.load_backoff_level),
             Arc::clone(&self.has_played_since_login),
         ));
         self.player.replace(new_player);
@@ -1282,6 +1340,7 @@ async fn player_setup_delegate(
     connection_lost: Arc<AtomicBool>,
     advance_after_reconnect: Arc<AtomicBool>,
     consecutive_load_failures: Arc<AtomicU32>,
+    load_backoff_level: Arc<AtomicU32>,
     has_played_since_login: Arc<AtomicBool>,
 ) {
     while let Some(event) = channel.recv().await {
@@ -1305,6 +1364,7 @@ async fn player_setup_delegate(
                 // A track played: not DRM-blocked. Clear the failure run and,
                 // on the first play this login, persist the account as known-good.
                 consecutive_load_failures.store(0, Ordering::Relaxed);
+                load_backoff_level.store(0, Ordering::Relaxed);
                 if !has_played_since_login.swap(true, Ordering::Relaxed) {
                     let _ = command_sender.unbounded_send(Command::MarkPlaybackVerified);
                 }
@@ -1337,6 +1397,15 @@ fn mixer_set_volume(mixer: &mut dyn Mixer, volume: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn load_backoff_doubles_up_to_the_cap() {
+        assert_eq!(load_backoff(1), Duration::from_secs(30));
+        assert_eq!(load_backoff(2), Duration::from_secs(60));
+        assert_eq!(load_backoff(3), Duration::from_secs(120));
+        assert_eq!(load_backoff(6), LOAD_BACKOFF_MAX);
+        assert_eq!(load_backoff(40), LOAD_BACKOFF_MAX);
+    }
 
     #[test]
     fn credentials_from_before_the_split_are_not_reused() {
