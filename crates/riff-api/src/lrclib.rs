@@ -41,13 +41,17 @@ pub async fn get_lyrics(track: &Track) -> Result<Lyrics, DomainError> {
         .bytes()
         .await
         .map_err(|e| DomainError::Network(e.to_string()))?;
-    let body: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|e| DomainError::Parse(format!("lrclib: {e}")))?;
+    let body: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| DomainError::Parse(format!("lrclib: {e}")))?;
     parse(&body)
 }
 
 fn parse(body: &serde_json::Value) -> Result<Lyrics, DomainError> {
-    let text = |key: &str| body.get(key).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty());
+    let text = |key: &str| {
+        body.get(key)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+    };
     let lyrics = if let Some(synced) = text("syncedLyrics") {
         Lyrics {
             synced: true,
@@ -115,7 +119,8 @@ mod tests {
 
     #[test]
     fn parses_lrc() {
-        let lines = parse_lrc("[ar: Someone]\n[00:12.50] Hello\n[01:02.00][00:05.00] Again\n[00:20.00]");
+        let lines =
+            parse_lrc("[ar: Someone]\n[00:12.50] Hello\n[01:02.00][00:05.00] Again\n[00:20.00]");
         let starts: Vec<u32> = lines.iter().map(|l| l.start_ms).collect();
         assert_eq!(starts, [5000, 12500, 20000, 62000]);
         assert_eq!(lines[0].words, "Again");

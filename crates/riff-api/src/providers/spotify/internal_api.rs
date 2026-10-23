@@ -257,7 +257,9 @@ impl SpotifyInternalApi {
             "/inspiredby-mix/v2/seed_to_playlist/{}?response-format=json",
             apis::urlencode(&seed)
         );
-        let body = self.request_as(Method::GET, &path, Vec::new(), JSON).await?;
+        let body = self
+            .request_as(Method::GET, &path, Vec::new(), JSON)
+            .await?;
         let mix: serde_json::Value = serde_json::from_slice(&body)
             .map_err(|e| DomainError::Parse(format!("song radio: {e}")))?;
         let playlist = mix

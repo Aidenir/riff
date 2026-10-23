@@ -137,7 +137,10 @@ pub fn build_song_menu(
     }
     if song.rri.uri.is_some() {
         // translators: Context menu entry of a track: plays songs like it.
-        let item = gio::MenuItem::new(Some(&gettextrs::gettext("Go to Song Radio")), Some("song.radio"));
+        let item = gio::MenuItem::new(
+            Some(&gettextrs::gettext("Go to Song Radio")),
+            Some("song.radio"),
+        );
         item.set_attribute_value("hidden-when", Some(&"action-missing".to_variant()));
         go_to_section.append_item(&item);
     }

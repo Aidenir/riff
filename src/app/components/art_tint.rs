@@ -74,7 +74,13 @@ fn dominant_of(pixels: impl Iterator<Item = [u8; 4]>, count: usize) -> Option<Rg
         .into_values()
         .max_by(|a, b| a[3].total_cmp(&b[3]))
         .unwrap_or(average);
-    (w > 0.0).then(|| Rgb((r / w).round() as u8, (g / w).round() as u8, (b / w).round() as u8))
+    (w > 0.0).then(|| {
+        Rgb(
+            (r / w).round() as u8,
+            (g / w).round() as u8,
+            (b / w).round() as u8,
+        )
+    })
 }
 
 /// Keep the hue, but bring the color to a lightness and saturation that
@@ -179,7 +185,10 @@ mod tests {
     #[test]
     fn falls_back_to_the_average_of_grey_images() {
         let pixels = [[100, 100, 100, 255], [200, 200, 200, 255]];
-        assert_eq!(dominant_of(pixels.iter().copied(), 2), Some(Rgb(150, 150, 150)));
+        assert_eq!(
+            dominant_of(pixels.iter().copied(), 2),
+            Some(Rgb(150, 150, 150))
+        );
         assert_eq!(dominant_of(std::iter::empty(), 0), None);
     }
 
