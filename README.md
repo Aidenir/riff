@@ -43,6 +43,13 @@ All three talk to Spotify through the same data layer, cache, login code, play q
 | ![Saved albums](doc/screenshots/macos-albums.png) | ![A playlist](doc/screenshots/macos-playlist.png) |
 | ![Now playing with the queue](doc/screenshots/macos-now-playing.png) | ![Synced lyrics](doc/screenshots/macos-lyrics.png) |
 
+### Android
+
+| | | |
+| --- | --- | --- |
+| ![Home, with the player dock](doc/screenshots/android-home.png) | ![Playlists in the library](doc/screenshots/android-library.png) | ![An album](doc/screenshots/android-album.png) |
+| ![Now playing, with the wavy progress line](doc/screenshots/android-nowplaying.png) | ![The queue](doc/screenshots/android-queue.png) | ![Synced lyrics](doc/screenshots/android-lyrics.png) |
+
 ## Features
 
 All apps:
@@ -57,7 +64,7 @@ All apps:
 - Synced lyrics that follow the song
 - A 10-band equalizer, stereo pan, pitch shift, mono audio and normalisation
 - Spotify Connect: play on your other devices (behind a feature flag)
-- Pin playlists, albums and artists to the sidebar (behind a feature flag)
+- Pin playlists, albums and artists to the sidebar, or the top of the library on Android (behind a feature flag)
 
 On Linux:
 
@@ -74,6 +81,8 @@ On macOS:
 
 On Android:
 
+- A floating player dock that takes on the album art, with a wavy progress line like the system media controls
+- Now Playing with Queue and synced Lyrics tabs, opened by tapping or swiping up the dock
 - Background playback with the media notification, lock screen, Bluetooth and headset controls
 - Pauses for calls and when headphones are unplugged, lets navigation prompts duck the music
 - Opens `open.spotify.com` links and accepts links shared from other apps
@@ -114,7 +123,9 @@ The app is not notarized yet, so the first launch needs right-click on Riff, the
 
 ### Android
 
-Download `Riff-<version>.apk` from this fork's releases (built by the `riff-android` workflow) on the phone and open it. Android asks once to allow installing apps from your browser or file manager.
+Download `Riff-<version>.apk` from this fork's releases (built and signed by the `riff-android` workflow) on the phone and open it. Android asks once to allow installing apps from your browser or file manager. Requires Android 13 or later; the APK runs on arm64 phones and x86_64 emulators.
+
+The first login opens Spotify's page in your browser and then returns to Riff. Every release is signed with the same key, so updates install over the previous version and keep you logged in.
 
 Some phone makers stop background apps aggressively. If music stops with the screen off, set Riff's battery usage to "Unrestricted" in the app info.
 
