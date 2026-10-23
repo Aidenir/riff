@@ -109,21 +109,13 @@
     <!-- playback indicator animation frames (see app.css) -->
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-paused-symbolic.svg">../data/hicolor/symbolic/actions/playback-paused-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-0-symbolic.svg">../data/hicolor/symbolic/actions/playback-0-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-1-symbolic.svg">../data/hicolor/symbolic/actions/playback-1-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-2-symbolic.svg">../data/hicolor/symbolic/actions/playback-2-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-3-symbolic.svg">../data/hicolor/symbolic/actions/playback-3-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-4-symbolic.svg">../data/hicolor/symbolic/actions/playback-4-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-5-symbolic.svg">../data/hicolor/symbolic/actions/playback-5-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-6-symbolic.svg">../data/hicolor/symbolic/actions/playback-6-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-7-symbolic.svg">../data/hicolor/symbolic/actions/playback-7-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-8-symbolic.svg">../data/hicolor/symbolic/actions/playback-8-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-9-symbolic.svg">../data/hicolor/symbolic/actions/playback-9-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-10-symbolic.svg">../data/hicolor/symbolic/actions/playback-10-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-11-symbolic.svg">../data/hicolor/symbolic/actions/playback-11-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-12-symbolic.svg">../data/hicolor/symbolic/actions/playback-12-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-13-symbolic.svg">../data/hicolor/symbolic/actions/playback-13-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-14-symbolic.svg">../data/hicolor/symbolic/actions/playback-14-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playback-15-symbolic.svg">../data/hicolor/symbolic/actions/playback-15-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playback-16-symbolic.svg">../data/hicolor/symbolic/actions/playback-16-symbolic.svg</file>
   </gresource>
 </gresources>

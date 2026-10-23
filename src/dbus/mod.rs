@@ -14,7 +14,8 @@ mod types;
 mod listener;
 use listener::*;
 
-#[tokio::main]
+// Only answers MPRIS calls: one thread is enough
+#[tokio::main(flavor = "current_thread")]
 async fn dbus_server(
     mpris: RiffMpris,
     player: RiffMprisPlayer,

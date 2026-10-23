@@ -123,7 +123,8 @@ pub trait PlayerDelegate: Send + Sync {
     fn audio_cache_size_limit_bytes(&self) -> u64;
 }
 
-#[tokio::main]
+// Two workers are plenty for one session; the default is one per core
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn player_main(
     player_settings: SpotifyPlayerSettings,
     delegate: Arc<dyn PlayerDelegate>,

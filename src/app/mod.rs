@@ -36,6 +36,11 @@ pub mod playlist_actions;
 #[cfg(debug_assertions)]
 mod dev_tools;
 
+/// Workers of the runtime the UI hands API calls to
+const APP_RUNTIME_WORKERS: usize = 4;
+/// Threads for its blocking work
+const APP_BLOCKING_THREADS: usize = 8;
+
 // Where all the app logic happens
 pub struct App {
     settings: RiffSettings,
@@ -386,7 +391,15 @@ impl App {
         // Runtime and guard both leak: GTK callbacks spawn onto this for the
         // life of the process, and a dropped guard makes a later spawn panic.
         let rt = Box::leak(Box::new(
-            tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime"),
+            // API calls and image decoding: a few workers, not one per core
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(APP_RUNTIME_WORKERS)
+                // Image decoding and disk cache reads queue up instead of
+                // starting hundreds of threads on a busy page
+                .max_blocking_threads(APP_BLOCKING_THREADS)
+                .enable_all()
+                .build()
+                .expect("Failed to acquire tokio runtime"),
         ));
         std::mem::forget(rt.enter());
 
