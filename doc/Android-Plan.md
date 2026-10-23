@@ -16,7 +16,7 @@ Plan for a native Android version of Riff with feature parity to the macOS app, 
 | Design | Fixed Riff theme from the app icon colours (green and teal primary, blue secondary, neutral surfaces), with the light, dark and system setting the other apps have. No dynamic colour. Art tint on Now Playing and detail headers, as on the Mac. |
 | App id | `com.aidenir.riff`, app name "Riff". |
 | Distribution | Release-signed APK attached to GitHub releases. No Google Play, no F-Droid. |
-| Signing | A release keystore generated once, stored outside the repo, backed up by Viktor (for example in 1Password), and provided to CI as GitHub Actions secrets. |
+| Signing | A release keystore generated once, stored outside the repo, backed up by Viktor in Bitwarden, and provided to CI as GitHub Actions secrets. |
 | Toolchain | rustup replaces Homebrew's Rust. Android targets `aarch64-linux-android` and `x86_64-linux-android`, `cargo-ndk`, and the NDK and SDK platform installed with the existing `sdkmanager`. No Android Studio. |
 | ABIs | `arm64-v8a` for phones, `x86_64` for the emulator. |
 | Testing | Viktor's phone over adb (USB or wifi), with a debug-only smoke test like the Mac's. Unit tests in Rust and Kotlin. |
@@ -36,7 +36,7 @@ Found while building, decided without stopping:
 - **Own back stacks instead of navigation-compose.** A small `Navigator` keeps one stack per tab, with a page model per entry, so switching tabs keeps loaded pages and scroll positions.
 - **Debug builds are `com.aidenir.riff.debug`**, so a debug and a release build can be installed side by side. The smoke test command is `adb shell am start -n com.aidenir.riff.debug/com.aidenir.riff.MainActivity -e smoke 1`, wrapped by `./scripts/test-android.sh --smoke`.
 - **A floating dock instead of a plain navigation bar.** Asked for during review: the mini player and the tabs share one rounded, art-tinted card, and the selected tab grows into a gradient pill. Startup shows an animated intro after the system splash, and loading uses bouncing equalizer bars and shimmering artwork placeholders.
-- **The release key lives in `~/.riff/`** (`riff-release.jks` and `release-signing.env`) on Viktor's Mac. It still needs a backup and the four GitHub secrets (`RIFF_KEYSTORE_BASE64`, `RIFF_KEYSTORE_PASSWORD`, `RIFF_KEY_ALIAS`, `RIFF_KEY_PASSWORD`).
+- **The release key lives in `~/.riff/`** (`riff-release.jks` and `release-signing.env`) on Viktor's Mac, is backed up in Bitwarden, and is in the GitHub secrets. See [Release.md](Release.md#android-signing-key).
 
 ## What the macOS port taught us
 
